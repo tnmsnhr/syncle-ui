@@ -4,7 +4,6 @@ export const DEFAULT_SETTINGS = {
   theme: "system",
   enabled: true,
   lassoTheme: DEFAULT_LASSO_THEME_ID,
-  autoCollapse: true,
 };
 
 export function loadSettings() {
@@ -26,11 +25,6 @@ export function loadSettings() {
 /** Only an explicit `false` disables drawing. */
 export function isDrawingEnabled(settings) {
   return settings?.enabled !== false;
-}
-
-/** Only an explicit `false` disables scroll auto-collapse. */
-export function isAutoCollapseEnabled(settings) {
-  return settings?.autoCollapse !== false;
 }
 
 export function saveSettings(partial) {

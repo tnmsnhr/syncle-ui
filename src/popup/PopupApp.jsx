@@ -11,13 +11,12 @@ import {
   signOut,
   trySilentGoogleSignIn,
 } from "../auth/googleSignIn.js";
-import { isCloudSignInAvailable } from "../auth/oauthConfig.js";
+import { isCloudSignInAvailable } from "../auth/googleSignIn.js";
 
 export default function PopupApp() {
   const [theme, setTheme] = useState("system");
   const [lassoTheme, setLassoTheme] = useState("emerald");
   const [enabled, setEnabled] = useState(true);
-  const [autoCollapse, setAutoCollapse] = useState(true);
   const [status, setStatus] = useState("");
   const [ready, setReady] = useState(false);
   const [accountEmail, setAccountEmail] = useState(null);
@@ -38,7 +37,6 @@ export default function PopupApp() {
         setTheme(s.theme);
         setLassoTheme(s.lassoTheme);
         setEnabled(s.enabled);
-        setAutoCollapse(s.autoCollapse !== false);
         setAccountEmail(active?.user?.email ?? null);
         applyThemeToDocument(s.theme);
         setReady(true);
@@ -112,15 +110,6 @@ export default function PopupApp() {
       setAuthBusy(false);
       setTimeout(() => setStatus(""), 1500);
     }
-  };
-
-  const onAutoCollapseChange = async (e) => {
-    const value = e.target.checked;
-    setAutoCollapse(value);
-    await persist(
-      { autoCollapse: value },
-      value ? "Auto-collapse on scroll enabled" : "Auto-collapse on scroll disabled"
-    );
   };
 
   if (!ready) {
@@ -240,22 +229,6 @@ export default function PopupApp() {
           </label>
         </div>
         <p className="hint">Hold ⌘ or Ctrl and drag on any page to draw.</p>
-        <div className="field">
-          <label htmlFor="autoCollapse">Auto-collapse on scroll</label>
-          <label className="toggle">
-            <input
-              id="autoCollapse"
-              type="checkbox"
-              checked={autoCollapse}
-              onChange={onAutoCollapseChange}
-            />
-            <span />
-          </label>
-        </div>
-        <p className="hint">
-          When on, chat bubbles shrink to dots after you scroll about 100px. You
-          can still minimize manually with the yellow button.
-        </p>
       </section>
 
       <p className="status" aria-live="polite">

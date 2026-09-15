@@ -6,23 +6,12 @@
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
 }
 
-.draw-root.meta-active {
-  pointer-events: auto;              /* ✅ only capture while Cmd held */
-  cursor: crosshair;
-}
-
-/* The wrapper that listens to pointer events when meta-active */
 .draw-canvas-wrap {
   position: absolute;
   left: 0;
   top: 0;
   /* Prevent touch panning/zoom interfering while drawing on touch devices */
   touch-action: none;
-}
-
-/* ✅ Drawn strokes never block clicks to the page below */
-.draw-canvas-wrap svg path {
-  pointer-events: none;
 }
 
 /* Draggable floating product toolbar (light DOM) */
@@ -146,6 +135,3 @@
 .syncle-center-button-icon-closed {
   transform: rotate(45deg) scale(0.96);
 }
-
-.color-swatch { /* ... unchanged ... */ }
-.width-chip { /* ... unchanged ... */ }

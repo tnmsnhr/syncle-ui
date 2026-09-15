@@ -276,16 +276,19 @@
       <a href="#glossary">Every file explained</a>
       <a href="#overview">Syncle overview</a>
       <a href="#bootstrap">1. Bootstrap</a>
-      <a href="#lasso">2. Lasso draw</a>
-      <a href="#capture">3. Capture pipeline</a>
-      <a href="#screenshot">4. Screenshot crop</a>
-      <a href="#register">5. Cloud register</a>
-      <a href="#chat">6. AI chat</a>
-      <a href="#toolbar">7. Floating toolbar</a>
-      <a href="#bubbles">8. Popup bubbles</a>
-      <a href="#api">9. API layer</a>
-      <a href="#auth">10. Auth &amp; popup</a>
-      <a href="#build">11. Build output</a>
+      <a href="#fullpage">2. Draw on whole page</a>
+      <a href="#anchor">3. Stick while scrolling</a>
+      <a href="#lasso">4. Lasso draw</a>
+      <a href="#capture">5. Capture pipeline</a>
+      <a href="#screenshot">6. Screenshot crop</a>
+      <a href="#register">7. Cloud register</a>
+      <a href="#chat">8. AI chat</a>
+      <a href="#toolbar">9. Floating toolbar</a>
+      <a href="#bubbles">10. Popup bubbles</a>
+      <a href="#api">11. API layer</a>
+      <a href="#auth">12. Auth &amp; popup</a>
+      <a href="#build">13. Build output</a>
+      <a href="#doc">This file</a>
       <a href="#files">File map</a>
     </nav>
 
@@ -570,23 +573,33 @@ sequenceDiagram
           >content-script.js</a>
           <a
             class="pill"
+            href="#fullpage"
+            data-detail="&lt;strong&gt;Full-page overlay&lt;/strong&gt; — Fixed host + viewport-sized canvases + &lt;code&gt;pointer-events: none&lt;/code&gt; until ⌘/Ctrl. Window-level pointer listeners draw anywhere on the visible page. See &lt;a href='#fullpage'&gt;§2 Draw on whole page&lt;/a&gt;."
+          >whole-page draw</a>
+          <a
+            class="pill"
+            href="#anchor"
+            data-detail="&lt;strong&gt;DOM anchor + offsets&lt;/strong&gt; — Each lasso pins to a page element; &lt;span class='fn'&gt;clientPointsFromAnchor&lt;/span&gt; recomputes screen position on scroll. See &lt;a href='#anchor'&gt;§3 Stick while scrolling&lt;/a&gt;."
+          >scroll anchoring</a>
+          <a
+            class="pill"
             href="#lasso"
-            data-detail="&lt;strong&gt;OverlayApp.jsx&lt;/strong&gt; — Main React UI: lasso drawing, popup bubbles, hotkey, undo/clear, AI chat trigger. Portals toolbar to light DOM. See &lt;a href='#lasso'&gt;§2 Lasso draw&lt;/a&gt;."
+            data-detail="&lt;strong&gt;OverlayApp.jsx&lt;/strong&gt; — Main React UI: lasso drawing, popup bubbles, hotkey, undo/clear, AI chat trigger. Portals toolbar to light DOM. See &lt;a href='#lasso'&gt;§4 Lasso draw&lt;/a&gt;."
           >OverlayApp.jsx</a>
           <a
             class="pill"
             href="#screenshot"
-            data-detail="&lt;strong&gt;background.js&lt;/strong&gt; — MV3 service worker. Handles &lt;code&gt;SYNCLE_FETCH&lt;/code&gt; (API proxy) and &lt;code&gt;EXTRACTION_CAPTURE_CROP&lt;/code&gt; (tab screenshot → offscreen). See &lt;a href='#screenshot'&gt;§4 Screenshot crop&lt;/a&gt; and &lt;a href='#api'&gt;§9 API layer&lt;/a&gt;."
+            data-detail="&lt;strong&gt;background.js&lt;/strong&gt; — MV3 service worker. Handles &lt;code&gt;SYNCLE_FETCH&lt;/code&gt; (API proxy) and &lt;code&gt;EXTRACTION_CAPTURE_CROP&lt;/code&gt; (tab screenshot → offscreen). See &lt;a href='#screenshot'&gt;§6 Screenshot crop&lt;/a&gt; and &lt;a href='#api'&gt;§11 API layer&lt;/a&gt;."
           >background.js</a>
           <a
             class="pill"
             href="#screenshot"
-            data-detail="&lt;strong&gt;offscreen.js&lt;/strong&gt; — Hidden document with canvas APIs. Crops the full-tab PNG to the lasso rect and returns JPEG base64. See &lt;a href='#screenshot'&gt;§4 Screenshot crop&lt;/a&gt;."
+            data-detail="&lt;strong&gt;offscreen.js&lt;/strong&gt; — Hidden document with canvas APIs. Crops the full-tab PNG to the lasso rect and returns JPEG base64. See &lt;a href='#screenshot'&gt;§6 Screenshot crop&lt;/a&gt;."
           >offscreen.js</a>
           <a
             class="pill"
             href="#capture"
-            data-detail="&lt;strong&gt;visual-primary&lt;/strong&gt; — Extraction strategy: no DOM text candidates; AI uses the screenshot crop + page title/meta. Set in &lt;span class='file'&gt;buildExtractedContext.ts&lt;/span&gt;. See &lt;a href='#capture'&gt;§3 Capture pipeline&lt;/a&gt;."
+            data-detail="&lt;strong&gt;visual-primary&lt;/strong&gt; — Extraction strategy: no DOM text candidates; AI uses the screenshot crop + page title/meta. Set in &lt;span class='file'&gt;buildExtractedContext.ts&lt;/span&gt;. See &lt;a href='#capture'&gt;§5 Capture pipeline&lt;/a&gt;."
           >visual-primary</a>
         </div>
         <div class="detail-panel" id="detail-overview-pills">
@@ -666,8 +679,151 @@ sequenceDiagram
         <div class="detail-panel" id="detail-bootstrap">Click a step above for details.</div>
       </section>
 
+      <section id="fullpage">
+        <h2>2. Draw on the whole page — full-viewport overlay</h2>
+        <p class="lead">
+          Syncle does not draw inside a small widget. It mounts a <b>viewport-sized layer</b> on top of every page so you can lasso anywhere you can see — while the page underneath stays clickable until you hold ⌘/Ctrl.
+        </p>
+        <div class="callout">
+          <b>Key idea:</b> The overlay is <code>position: fixed</code> and sized to the <b>visual viewport</b> (handles mobile pinch-zoom and browser chrome). Pointer listeners attach to <code>window</code> in capture phase, so drawing works over any site layout, iframe sibling, or scroll position — as long as the point is on screen.
+        </div>
+        <div class="diagram-wrap"><pre class="mermaid">
+flowchart TB
+  subgraph Inject["content-script.jsx"]
+    H["#draw-on-web-root-host<br/>fixed inset 0 · pointer-events none"]
+    SH[Shadow DOM + .draw-root]
+    OA[OverlayApp]
+    H --> SH --> OA
+  end
+  subgraph Layers["OverlayApp canvases"]
+    INK[inkCanvas — committed lassos]
+    LIVE[liveCanvas — stroke preview]
+  end
+  subgraph Input["When ⌘/Ctrl held"]
+    HK[hotkeyReady + draw cursor on html/body]
+    WIN["window pointerdown/move/up<br/>capture: true"]
+  end
+  OA --> INK
+  OA --> LIVE
+  HK --> WIN
+  WIN --> LIVE
+        </pre></div>
+        <h3>Layer stack (bottom → top)</h3>
+        <table class="map">
+          <thead><tr><th>Layer</th><th>DOM / file</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Host page</td><td>Site HTML</td><td>Normal clicks, scroll, inputs — untouched by default</td></tr>
+            <tr><td>Shadow host</td><td><span class="file">content-script.jsx</span> <code>#draw-on-web-root-host</code></td><td><code>fixed; inset:0; 100vw×100vh; pointer-events:none; z-index:2147483646</code></td></tr>
+            <tr><td>React root</td><td><span class="file">OverlayApp.jsx</span> <code>.draw-root</code></td><td><code>fixed; inset:0</code> sized to <span class="fn">getViewportSize()</span> (uses <code>visualViewport</code>)</td></tr>
+            <tr><td>Ink + live canvas</td><td>Two <code>&lt;canvas&gt;</code> elements</td><td>CSS size = viewport; bitmap scaled by <code>devicePixelRatio</code></td></tr>
+            <tr><td>Toolbar / bubbles</td><td>Portaled to light DOM mounts</td><td><code>pointer-events: auto</code> only on interactive UI</td></tr>
+          </tbody>
+        </table>
+        <h3>Why the page stays usable</h3>
+        <p class="lead">
+          Almost everything uses <code>pointer-events: none</code> (<span class="file">overlay.css</span>, host, canvas). The extension does <b>not</b> block clicks until you hold the hotkey and start a stroke. Listeners are on <code>window</code>, not on a full-screen blocking div — so there is no invisible glass pane stealing events when you are not drawing.
+        </p>
+        <div class="flow-controls">
+          <button class="flow-btn primary" data-play="fullpage">▶ Play step-by-step</button>
+          <button class="flow-btn" data-reset="fullpage">Reset</button>
+        </div>
+        <ol class="steps" data-flow="fullpage">
+          <li data-detail="content-script.jsx appends a fixed full-viewport host and separate light-DOM mounts for toolbar + bubbles. React renders inside shadow; CSS from overlay.css is inlined twice (shadow + page) for portaled nodes.">
+            <span class="num">1</span>
+            <div><span class="fn">inject()</span> full-viewport host<div class="desc">#draw-on-web-root-host covers the tab</div></div>
+          </li>
+          <li data-detail="resizeCanvases() reads getViewportSize() (visualViewport or innerWidth/Height), sets canvas CSS width/height, and scales the 2D context by devicePixelRatio. ResizeObserver on document.documentElement + window/visualViewport resize keep the layer full-screen.">
+            <span class="num">2</span>
+            <div><span class="fn">resizeCanvases</span><div class="desc">Canvases always match visible viewport</div></div>
+          </li>
+          <li data-detail="keydown/keyup (capture): Meta or Ctrl sets hotkeyReady. When drawingEnabled && AI mode && hotkeyReady, documentElement and body get AI_DRAW_CURSOR (custom crosshair+sparkle) with !important.">
+            <span class="num">3</span>
+            <div>Hold <b>⌘</b> or <b>Ctrl</b><div class="desc">Cursor shows draw mode; page still receives clicks if you don't drag</div></div>
+          </li>
+          <li data-detail="pointerdown on window (capture): requires drawingEnabledRef, isAiProductMode, isHotkey(e), left button, and target NOT inside .popup-bubble, .syncle-floating-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount. Records clientX/Y and pageX/Y. drawLive() previews on liveCanvas.">
+            <span class="num">4</span>
+            <div><span class="fn">start</span> anywhere on screen<div class="desc">Drag across the whole visible page</div></div>
+          </li>
+          <li data-detail="pointermove appends points (min 2px apart). If hotkey released mid-stroke → finishCommit(). pointerup / pointercancel / Escape end or cancel. Committed shapes paint on inkCanvas; live canvas clears.">
+            <span class="num">5</span>
+            <div><span class="fn">move</span> / <span class="fn">finishCommit</span><div class="desc">Free-hand lasso over full viewport</div></div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-fullpage">Click a step or press Play.</div>
+        <div class="tree">content-script.jsx
+├── #draw-on-web-root-host     fixed inset 0, pointer-events none
+├── #syncle-overlay-mount      portal target for PopupBubble
+├── #syncle-toolbar-mount      portal target for FloatingToolbar
+└── shadow → OverlayApp
+    ├── inkCanvasRef           committed polygons (redrawInk)
+    ├── liveCanvasRef          in-progress stroke (drawLive)
+    └── window listeners       capture phase, whole tab</div>
+      </section>
+
+      <section id="anchor">
+        <h2>3. Stick with the page — scroll anchoring</h2>
+        <p class="lead">
+          Lassos are not painted in fixed screen coordinates forever. On commit, Syncle <b>pins each polygon to a DOM element</b> under the selection and stores corner <b>offsets</b> relative to that element. On every scroll or resize, it recomputes screen positions from the anchor's current <code>getBoundingClientRect()</code> — so the highlight and chat bubble move with the content.
+        </p>
+        <div class="diagram-wrap"><pre class="mermaid">
+sequenceDiagram
+  participant U as User commits lasso
+  participant OA as OverlayApp
+  participant AC as anchorCoords.js
+  participant DOM as Page element (anchor)
+  participant SC as scroll / resize
+  U->>OA: finishCommit (≥3 points)
+  OA->>AC: pickAnchor(centroid)
+  AC->>DOM: elementsFromPoint → stable block
+  OA->>AC: offsetsFromClientPoints(anchor, clientPts)
+  OA->>OA: store poly { offsets, pts page fallback, anchor }
+  SC->>OA: scroll (capture) / rAF loop
+  OA->>AC: clientPointsFromAnchor(anchor, offsets)
+  AC->>DOM: getBoundingClientRect()
+  AC-->>OA: viewport x,y per corner
+  OA->>OA: redrawInk() + reposition PopupBubble
+        </pre></div>
+        <h3>Anchor pick — what element we attach to</h3>
+        <p class="lead"><span class="fn">pickAnchor(clientX, clientY)</span> uses <code>document.elementsFromPoint</code> at the lasso centroid, skipping Syncle's own hosts and bubbles. It walks up parents and prefers a block at least 48×24px, skipping <code>position: fixed</code> and <code>sticky</code> nodes so the anchor is usually a card, paragraph, or table cell — not the viewport chrome.</p>
+        <table class="map">
+          <thead><tr><th>Stored per lasso</th><th>Format</th><th>Used when</th></tr></thead>
+          <tbody>
+            <tr><td><code>offsets</code></td><td><code>{ dx, dy }</code> from anchor top-left</td><td>Anchor still in DOM (<code>isConnected</code>)</td></tr>
+            <tr><td><code>pts</code> (page coords)</td><td><code>{ x: pageX, y: pageY }</code></td><td>Fallback if anchor removed from DOM</td></tr>
+            <tr><td><code>anchor</code></td><td>Element reference in <code>anchorsRef</code></td><td>Live lookup each frame via <span class="fn">getAnchor(id)</span></td></tr>
+            <tr><td><code>popupOffset</code></td><td><code>{ dx, dy }</code> from anchor</td><td>Bubble placement beside bbox</td></tr>
+          </tbody>
+        </table>
+        <div class="flow-controls">
+          <button class="flow-btn primary" data-play="anchor">▶ Play step-by-step</button>
+          <button class="flow-btn" data-reset="anchor">Reset</button>
+        </div>
+        <ol class="steps" data-flow="anchor">
+          <li data-detail="finishCommit averages clientX/clientY → centroid, then pickAnchor(cx, cy). offsetsFromClientPoints stores each corner relative to anchor.getBoundingClientRect(). pagePts (pageX/pageY) saved as fallback.">
+            <span class="num">1</span>
+            <div><span class="fn">finishCommit</span> → <span class="fn">pickAnchor</span><div class="desc">Pin lasso to page content</div></div>
+          </li>
+          <li data-detail="redrawInk loops polysRef: clientPointsFromAnchor(anchor, offsets, pagePts) → if anchor connected, left+dx, top+dy; else pagePts minus scrollX/Y. Strokes drawn in viewport space on ink canvas.">
+            <span class="num">2</span>
+            <div><span class="fn">clientPointsFromAnchor</span><div class="desc">Map stored offsets → screen pixels</div></div>
+          </li>
+          <li data-detail="document.addEventListener('scroll', schedule, { capture: true }) — fires for nested scrollers too. visualViewport scroll/resize also scheduled. rAF loop calls syncFrame when polys or popups exist.">
+            <span class="num">3</span>
+            <div><span class="fn">syncFrame</span> on scroll<div class="desc">Ink + bubbles track the anchor every frame</div></div>
+          </li>
+          <li data-detail="PopupBubble position uses clientPointFromAnchor(anchor, popupOffset). getSelectionCentroid drives compact chip placement. attachScrollBubbleController may collapse bubbles after ~100px scroll (settings).">
+            <span class="num">4</span>
+            <div>Bubbles follow anchor<div class="desc">utils/scrollBubble.js optional auto-collapse</div></div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-anchor">Click a step or press Play.</div>
+        <div class="callout warn">
+          <b>Viewport overlay vs document coordinates:</b> The draw layer is fixed to the <em>viewport</em>, but committed shapes are anchored to <em>document content</em>. That is why scroll recomputation is required — without anchors, lassos would slide off the page when you scroll.
+        </div>
+      </section>
+
       <section id="lasso">
-        <h2>2. Lasso draw — pointer → polygon</h2>
+        <h2>4. Lasso draw — pointer → polygon</h2>
         <p class="lead">Drawing only works in AI product mode when drawing is enabled and ⌘/Ctrl is held.</p>
         <div class="flow-controls">
           <button class="flow-btn primary" data-play="lasso">▶ Play step-by-step</button>
@@ -701,16 +857,16 @@ stateDiagram-v2
             <span class="num">4</span>
             <div><span class="fn">finishCommit</span><div class="desc">Commits lasso + spawns popup</div></div>
           </li>
-          <li data-detail="Scroll/resize: ResizeObserver + scroll listeners call syncFrame() to reposition ink and bubbles via anchor offsets (utils/anchorCoords.js).">
+          <li data-detail="After commit, scroll anchoring keeps ink aligned — see §3 Stick while scrolling. syncFrame() + anchorCoords.js reproject corners each frame.">
             <span class="num">5</span>
-            <div><span class="fn">syncFrame</span>, <span class="file">utils/anchorCoords.js</span><div class="desc">Selections stay pinned while scrolling</div></div>
+            <div><span class="fn">syncFrame</span> → <a href="#anchor">§3 anchor</a><div class="desc">Selections stay pinned while scrolling</div></div>
           </li>
         </ol>
         <div class="detail-panel" id="detail-lasso">Click a step or press Play.</div>
       </section>
 
       <section id="capture">
-        <h2>3. Capture pipeline — after lasso closes</h2>
+        <h2>5. Capture pipeline — after lasso closes</h2>
         <p class="lead">No DOM text extraction. Only bounding rect, page meta, and JPEG crop.</p>
         <div class="diagram-wrap"><pre class="mermaid">
 flowchart LR
@@ -757,7 +913,7 @@ flowchart LR
       </section>
 
       <section id="screenshot">
-        <h2>4. Screenshot crop — extension ↔ offscreen</h2>
+        <h2>6. Screenshot crop — extension ↔ offscreen</h2>
         <div class="diagram-wrap"><pre class="mermaid">
 sequenceDiagram
   participant CC as captureClient.ts
@@ -783,7 +939,7 @@ sequenceDiagram
       </section>
 
       <section id="register">
-        <h2>5. Cloud register — page + selection IDs</h2>
+        <h2>7. Cloud register — page + selection IDs</h2>
         <p class="lead">When <code>CLOUD_SYNC_ENABLED</code> is true, each lasso registers with syncle-services. Crop base64 is stripped from register payload (hasImage flag only) to keep requests small.</p>
         <div class="diagram-wrap"><pre class="mermaid">
 flowchart TD
@@ -817,7 +973,7 @@ flowchart TD
       </section>
 
       <section id="chat">
-        <h2>6. AI chat — automatic explain on selection</h2>
+        <h2>8. AI chat — automatic explain on selection</h2>
         <div class="diagram-wrap"><pre class="mermaid">
 sequenceDiagram
   participant OA as OverlayApp
@@ -845,7 +1001,7 @@ sequenceDiagram
       </section>
 
       <section id="toolbar">
-        <h2>7. Floating toolbar — radial menu</h2>
+        <h2>9. Floating toolbar — radial menu</h2>
         <p class="lead">Portaled to <code>#syncle-toolbar-mount</code> (light DOM). Center button drag + tap to expand arc actions.</p>
         <table class="map">
           <thead><tr><th>Action</th><th>Handler</th></tr></thead>
@@ -859,7 +1015,7 @@ sequenceDiagram
       </section>
 
       <section id="bubbles">
-        <h2>8. Popup bubbles — UI on selection</h2>
+        <h2>10. Popup bubbles — UI on selection</h2>
         <table class="map">
           <thead><tr><th>Method</th><th>File</th><th>Purpose</th></tr></thead>
           <tbody>
@@ -873,7 +1029,7 @@ sequenceDiagram
       </section>
 
       <section id="api">
-        <h2>9. API layer — reaching syncle-services</h2>
+        <h2>11. API layer — reaching syncle-services</h2>
         <div class="tree">apiFetch(path)
 ├── fetchViaBackground → chrome.runtime.sendMessage({ type: "SYNCLE_FETCH" })
 │   └── background.js → fetch(url) with Authorization header
@@ -886,7 +1042,7 @@ Used by:
       </section>
 
       <section id="auth">
-        <h2>10. Auth &amp; extension popup</h2>
+        <h2>12. Auth &amp; extension popup</h2>
         <p class="lead">Separate Vite entry: <span class="file">popup.html</span> → <span class="fn">PopupApp</span>. Settings sync to content script via <code>chrome.storage.sync</code>.</p>
         <table class="map">
           <thead><tr><th>Setting</th><th>Storage key</th><th>Read by OverlayApp</th></tr></thead>
@@ -900,7 +1056,7 @@ Used by:
       </section>
 
       <section id="build">
-        <h2>11. Build output</h2>
+        <h2>13. Build output</h2>
         <div class="tree">npm run build
 ├── vite build              → dist/popup.html + popup assets
 ├── vite content config     → dist/content-script.js (OverlayApp bundle)
@@ -929,6 +1085,33 @@ Load unpacked: point Chrome to syncle-ui/dist/</div>
             <tr><td class="file">public/offscreen.js</td><td>Image crop + JPEG encode</td></tr>
             <tr><td class="file">utils/anchorCoords.js</td><td>Scroll-anchored coordinates</td></tr>
             <tr><td class="file">popup/PopupApp.jsx</td><td>Settings + Google sign-in</td></tr>
+            <tr><td class="file">docs/extension-flow.html</td><td>This interactive architecture guide (open in browser)</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="doc">
+        <h2>extension-flow.html — this document</h2>
+        <p class="lead">
+          Standalone HTML explorer for Chrome Extension basics and Syncle implementation flows. No build step — open the file directly after clone.
+        </p>
+        <div class="tree">syncle-ui/docs/extension-flow.html
+├── Left nav — jump to any section (Chrome 101 → file map)
+├── Mermaid diagrams — architecture, sequences, state machines
+├── Clickable step lists — install, bootstrap, full-page draw, anchoring, lasso, …
+└── Overview chips — quick links to bootstrap, whole-page draw, scroll anchor, API</div>
+        <h3>Open locally</h3>
+        <pre class="tree" style="margin-top:0.5rem">cd syncle-ui
+open docs/extension-flow.html
+# or: file:///…/syncle-ui/docs/extension-flow.html</pre>
+        <p class="lead">Requires network once for Mermaid CDN (<code>cdn.jsdelivr.net</code>). All Syncle copy is embedded in the HTML.</p>
+        <h3>Sections most relevant to drawing</h3>
+        <table class="map">
+          <thead><tr><th>Section</th><th>Topic</th></tr></thead>
+          <tbody>
+            <tr><td><a href="#fullpage">§2 Draw on whole page</a></td><td>Fixed overlay, viewport canvases, pointer-events, window listeners</td></tr>
+            <tr><td><a href="#anchor">§3 Stick while scrolling</a></td><td>pickAnchor, offsets, syncFrame, bubble tracking</td></tr>
+            <tr><td><a href="#lasso">§4 Lasso draw</a></td><td>Hotkey state machine, commit, live vs ink canvas</td></tr>
           </tbody>
         </table>
       </section>

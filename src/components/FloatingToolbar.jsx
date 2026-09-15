@@ -7,11 +7,36 @@ const VIEWPORT_MARGIN = 12;
 const DRAG_THRESHOLD = 5;
 const ARC_RADIUS = 78;
 const ARC_ITEMS = [
-  { kind: "mode", modeId: "clips", angle: 198, className: "syncle-arc-button-violet" },
-  { kind: "mode", modeId: "ai", angle: 156, className: "syncle-arc-button-indigo" },
-  { kind: "mode", modeId: "notes", angle: 114, className: "syncle-arc-button-pink" },
-  { kind: "action", actionId: "undo", angle: 72, className: "syncle-arc-button-slate" },
-  { kind: "action", actionId: "clear", angle: 30, className: "syncle-arc-button-amber" },
+  {
+    kind: "mode",
+    modeId: "clips",
+    angle: 198,
+    className: "syncle-arc-button-violet",
+  },
+  {
+    kind: "mode",
+    modeId: "ai",
+    angle: 156,
+    className: "syncle-arc-button-indigo",
+  },
+  {
+    kind: "mode",
+    modeId: "page",
+    angle: 114,
+    className: "syncle-arc-button-pink",
+  },
+  {
+    kind: "action",
+    actionId: "undo",
+    angle: 72,
+    className: "syncle-arc-button-slate",
+  },
+  {
+    kind: "action",
+    actionId: "clear",
+    angle: 30,
+    className: "syncle-arc-button-amber",
+  },
 ];
 
 function loadToolbarPosition() {
@@ -19,11 +44,7 @@ function loadToolbarPosition() {
     try {
       chrome.storage.local.get({ [TOOLBAR_POS_KEY]: null }, (items) => {
         const pos = items?.[TOOLBAR_POS_KEY];
-        if (
-          pos &&
-          Number.isFinite(pos.x) &&
-          Number.isFinite(pos.y)
-        ) {
+        if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
           resolve(pos);
         } else {
           resolve(null);
@@ -45,25 +66,19 @@ function saveToolbarPosition(pos) {
 
 function defaultPosition(viewport) {
   return {
-    x: Math.max(
-      VIEWPORT_MARGIN,
-      viewport.width - TOOLBAR_SIZE.width - 16
-    ),
-    y: Math.max(
-      VIEWPORT_MARGIN,
-      viewport.height - TOOLBAR_SIZE.height - 16
-    ),
+    x: Math.max(VIEWPORT_MARGIN, viewport.width - TOOLBAR_SIZE.width - 16),
+    y: Math.max(VIEWPORT_MARGIN, viewport.height - TOOLBAR_SIZE.height - 16),
   };
 }
 
 function clampPosition(pos, viewport) {
   const maxX = Math.max(
     VIEWPORT_MARGIN,
-    viewport.width - TOOLBAR_SIZE.width - VIEWPORT_MARGIN
+    viewport.width - TOOLBAR_SIZE.width - VIEWPORT_MARGIN,
   );
   const maxY = Math.max(
     VIEWPORT_MARGIN,
-    viewport.height - TOOLBAR_SIZE.height - VIEWPORT_MARGIN
+    viewport.height - TOOLBAR_SIZE.height - VIEWPORT_MARGIN,
   );
   return {
     x: Math.min(Math.max(VIEWPORT_MARGIN, pos.x), maxX),
@@ -127,9 +142,7 @@ export default function FloatingToolbar({
     let cancelled = false;
     loadToolbarPosition().then((saved) => {
       if (cancelled) return;
-      setPosition(
-        clampPosition(saved ?? defaultPosition(viewport), viewport)
-      );
+      setPosition(clampPosition(saved ?? defaultPosition(viewport), viewport));
     });
     return () => {
       cancelled = true;
@@ -139,7 +152,7 @@ export default function FloatingToolbar({
   useEffect(() => {
     if (!position) return;
     setPosition((prev) =>
-      prev ? clampPosition(prev, viewport) : defaultPosition(viewport)
+      prev ? clampPosition(prev, viewport) : defaultPosition(viewport),
     );
   }, [viewport.width, viewport.height]);
 
@@ -159,7 +172,7 @@ export default function FloatingToolbar({
         isPointerPressed: true,
       };
     },
-    [position, viewport]
+    [position, viewport],
   );
 
   const onDragPointerMove = useCallback(
@@ -178,11 +191,11 @@ export default function FloatingToolbar({
 
       const next = clampPosition(
         { x: drag.menuStartX + dx, y: drag.menuStartY + dy },
-        viewport
+        viewport,
       );
       setPosition(next);
     },
-    [isDragging, viewport]
+    [isDragging, viewport],
   );
 
   const onDragPointerUp = useCallback((e) => {
@@ -215,7 +228,8 @@ export default function FloatingToolbar({
   const center = TOOLBAR_SIZE.width / 2;
   const itemSize = 40;
   const centerButtonSize = 54;
-  const activeMeta = PRODUCT_MODE_LIST.find((m) => m.id === productMode) ?? PRODUCT_MODE_LIST[0];
+  const activeMeta =
+    PRODUCT_MODE_LIST.find((m) => m.id === productMode) ?? PRODUCT_MODE_LIST[0];
 
   return (
     <div
@@ -270,20 +284,31 @@ export default function FloatingToolbar({
               e.stopPropagation();
               if (item.kind === "mode") onProductModeChange(item.modeId);
               if (item.kind === "action" && item.actionId === "undo") onUndo();
-              if (item.kind === "action" && item.actionId === "clear") onClear();
+              if (item.kind === "action" && item.actionId === "clear")
+                onClear();
             }}
           >
             {item.kind === "mode" ? (
               <ModeIcon modeId={item.modeId} />
             ) : item.actionId === "undo" ? (
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                aria-hidden="true"
+              >
                 <path
                   fill="currentColor"
                   d="M12.5 8c-2.65 0-5.05 1.28-6.55 3.25L3 8v8h8l-2.48-2.48A6.98 6.98 0 0 1 12.5 10c3.04 0 5.5 2.46 5.5 5.5h2C20 11.02 16.73 8 12.5 8z"
                 />
               </svg>
             ) : (
-              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                aria-hidden="true"
+              >
                 <path
                   fill="currentColor"
                   d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
@@ -301,7 +326,7 @@ export default function FloatingToolbar({
         title={
           productMode === "ai"
             ? `Hold Cmd/Ctrl + drag${!drawingEnabled ? " (off)" : hotkeyReady ? " · ready" : ""}`
-            : activeMeta?.label ?? "Syncle tools"
+            : (activeMeta?.label ?? "Syncle tools")
         }
         style={{
           width: `${centerButtonSize}px`,
@@ -315,7 +340,9 @@ export default function FloatingToolbar({
         onPointerUp={onDragPointerUp}
         onPointerCancel={onDragPointerCancel}
       >
-        <span className={`syncle-center-button-icon${isOpen ? "" : " syncle-center-button-icon-closed"}`}>
+        <span
+          className={`syncle-center-button-icon${isOpen ? "" : " syncle-center-button-icon-closed"}`}
+        >
           <ModeIcon modeId={productMode} />
         </span>
       </button>

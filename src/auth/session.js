@@ -27,14 +27,3 @@ export function clearSession() {
     chrome.storage.local.remove(SESSION_KEY, () => resolve());
   });
 }
-
-export async function isSignedIn() {
-  const session = await loadSession();
-  return Boolean(session?.token);
-}
-
-export async function getAuthHeaders() {
-  const session = await loadSession();
-  if (!session?.token) return {};
-  return { Authorization: `Bearer ${session.token}` };
-}

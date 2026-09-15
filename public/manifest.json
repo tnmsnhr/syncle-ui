@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Syncle",
   "version": "1.0.0",
-  "description": "Hold ⌘ or Ctrl and lasso areas on any webpage. Selections and chat bubbles stay pinned while you scroll.",
+  "description": "Hold ⌘ or Ctrl and lasso areas on any webpage. Open chat bubbles beside your selections.",
   "permissions": ["tabs", "activeTab", "scripting", "offscreen", "storage", "identity"],
   "host_permissions": [
     "<all_urls>",
