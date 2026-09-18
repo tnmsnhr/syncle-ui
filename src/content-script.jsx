@@ -3,8 +3,9 @@ import { createRoot } from "react-dom/client";
 import OverlayApp from "./OverlayApp.jsx";
 import overlayCss from "./overlay.css?inline";
 import popupBubbleCss from "./components/popupBubble.css?inline";
+import selectionToolbarCss from "./components/selectionToolbar.css?inline";
 
-const extensionCss = `${overlayCss}\n${popupBubbleCss}`;
+const extensionCss = `${overlayCss}\n${popupBubbleCss}\n${selectionToolbarCss}`;
 
 /**
  * Inject a Shadow DOM root to isolate styles from the host page.

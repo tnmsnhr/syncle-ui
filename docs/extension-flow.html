@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Syncle Extension — Architecture &amp; Flow Explorer</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0c0c0f;
+      --panel: #16161c;
+      --panel2: #1e1e26;
+      --border: #2a2a35;
+      --text: #e8e8ef;
+      --muted: #9ca3af;
+      --accent: #6366f1;
+      --accent2: #f97316;
+      --green: #22c55e;
+      --code-bg: #0f0f14;
+      --link: #818cf8;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+      padding: 1rem 0.75rem 2rem;
+    }
+    nav h1 {
+      font-size: 1rem;
+      margin: 0 0.5rem 1rem;
+      padding: 0 0.5rem;
+      color: var(--accent2);
+    }
+    nav .sub {
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 0 0.5rem 1rem;
+    }
+    nav a {
+      display: block;
+      padding: 0.45rem 0.65rem;
+      margin: 2px 0;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      transition: background 0.15s, color 0.15s;
+    }
+    nav a:hover { background: var(--panel2); color: var(--text); }
+    nav a.active {
+      background: rgba(99, 102, 241, 0.2);
+      color: var(--link);
+      font-weight: 600;
+    }
+    main {
+      padding: 2rem 2.5rem 4rem;
+      max-width: 1100px;
+    }
+    section {
+      margin-bottom: 3.5rem;
+      scroll-margin-top: 1.5rem;
+    }
+    h2 {
+      font-size: 1.5rem;
+      margin: 0 0 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h3 { font-size: 1.05rem; margin: 1.5rem 0 0.6rem; color: var(--link); }
+    p.lead { color: var(--muted); max-width: 72ch; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0; }
+    .pill {
+      font-size: 0.72rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 999px;
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      display: inline-block;
+    }
+    a.pill {
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+    }
+    a.pill:hover {
+      background: rgba(99, 102, 241, 0.18);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    a.pill:active { transform: translateY(0); }
+    a.pill.active {
+      background: rgba(99, 102, 241, 0.28);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+    .pill.accent { border-color: var(--accent); color: var(--link); }
+    .diagram-wrap {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      margin: 1rem 0;
+      overflow-x: auto;
+    }
+    .mermaid { background: transparent !important; }
+    .flow-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1rem 0;
+    }
+    button.flow-btn {
+      background: var(--panel2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.45rem 0.85rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    button.flow-btn:hover { border-color: var(--accent); }
+    button.flow-btn.primary {
+      background: rgba(99, 102, 241, 0.25);
+      border-color: var(--accent);
+    }
+    ol.steps {
+      list-style: none;
+      padding: 0;
+      margin: 1rem 0;
+    }
+    ol.steps li {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      gap: 0.75rem;
+      padding: 0.65rem 0.75rem;
+      margin: 0.35rem 0;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    ol.steps li:hover { background: var(--panel2); }
+    ol.steps li.active {
+      background: rgba(99, 102, 241, 0.12);
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+    ol.steps li .num {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      background: var(--panel2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    ol.steps li.active .num {
+      background: var(--accent);
+      color: #fff;
+    }
+    .fn { font-family: ui-monospace, monospace; font-size: 0.82rem; color: #c4b5fd; }
+    .file { font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--green); }
+    .desc { font-size: 0.88rem; color: var(--muted); margin-top: 0.2rem; }
+    table.map {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin: 1rem 0;
+    }
+    table.map th, table.map td {
+      text-align: left;
+      padding: 0.55rem 0.65rem;
+      border-bottom: 1px solid var(--border);
+    }
+    table.map th { color: var(--muted); font-weight: 600; }
+    table.map tr:hover td { background: var(--panel2); }
+    .tree {
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.55;
+      color: #a5b4fc;
+    }
+    .detail-panel {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-top: 1rem;
+      min-height: 4rem;
+    }
+    .detail-panel strong { color: var(--accent2); }
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    .legend div {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem;
+      font-size: 0.85rem;
+    }
+    .legend b { display: block; margin-bottom: 0.25rem; }
+    .callout {
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      border-radius: 10px;
+      padding: 1rem 1.15rem;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+    .callout.warn {
+      background: rgba(249, 115, 22, 0.08);
+      border-color: rgba(249, 115, 22, 0.35);
+    }
+    .callout b { color: var(--accent2); }
+    details.file-group {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin: 0.5rem 0;
+      padding: 0.5rem 0.75rem;
+    }
+    details.file-group summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--link);
+    }
+    details.file-group p { margin: 0.5rem 0 0; font-size: 0.88rem; color: var(--muted); }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      nav { position: relative; height: auto; }
+      main { padding: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav id="nav">
+      <h1>Syncle UI</h1>
+      <p class="sub">Extension guide + flow explorer</p>
+      <a href="#ext-101" class="active">Chrome Extension 101</a>
+      <a href="#worlds">Three JS worlds</a>
+      <a href="#required">What you need to build one</a>
+      <a href="#pieces">MV3 pieces explained</a>
+      <a href="#glossary">Every file explained</a>
+      <a href="#overview">Syncle overview</a>
+      <a href="#bootstrap">1. Bootstrap</a>
+      <a href="#fullpage">2. Draw on whole page</a>
+      <a href="#anchor">3. Stick while scrolling</a>
+      <a href="#lasso">4. Lasso draw</a>
+      <a href="#capture">5. Capture pipeline</a>
+      <a href="#screenshot">6. Screenshot crop</a>
+      <a href="#register">7. Cloud register</a>
+      <a href="#chat">8. AI chat</a>
+      <a href="#toolbar">9. Floating toolbar</a>
+      <a href="#bubbles">10. Popup bubbles</a>
+      <a href="#api">11. API layer</a>
+      <a href="#auth">12. Auth &amp; popup</a>
+      <a href="#build">13. Build output</a>
+      <a href="#doc">This file</a>
+      <a href="#files">File map</a>
+    </nav>
+
+    <main>
+      <section id="ext-101">
+        <h2>Chrome Extension 101</h2>
+        <p class="lead">
+          A Chrome extension is <b>not</b> a single web app. It is a small package Chrome loads from
+          <span class="file">manifest.json</span>, made of <b>separate JavaScript programs</b> that run in
+          different contexts and talk through Chrome APIs.
+        </p>
+        <div class="callout">
+          <b>Manifest V3 (MV3)</b> is the current format. Syncle uses MV3. The “background page” from old
+          extensions is now a <b>service worker</b> (<span class="file">background.js</span>) — it can sleep,
+          wake on events, and must not assume it stays alive forever.
+        </div>
+        <h3>What happens when a user installs Syncle</h3>
+        <ol class="steps" data-flow="install">
+          <li data-detail="Chrome reads dist/manifest.json and registers the extension ID, permissions, and entry points.">
+            <span class="num">1</span>
+            <div>Chrome reads <span class="file">manifest.json</span><div class="desc">Declares scripts, permissions, popup, host access</div></div>
+          </li>
+          <li data-detail="background.js service worker starts (or wakes on events). It listens for chrome.runtime.onMessage.">
+            <span class="num">2</span>
+            <div>Background service worker starts<div class="desc">Handles fetch proxy + tab screenshots</div></div>
+          </li>
+          <li data-detail="On each matching tab navigation, Chrome injects content-script.js at document_end.">
+            <span class="num">3</span>
+            <div>Content script injects on web pages<div class="desc">Runs OverlayApp in Shadow DOM</div></div>
+          </li>
+          <li data-detail="User clicks toolbar icon → popup.html opens (separate small window). Settings written to chrome.storage.sync.">
+            <span class="num">4</span>
+            <div>Popup opens on icon click<div class="desc">Settings, sign-in — does not draw lassos</div></div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-install">Click a step above.</div>
+      </section>
+
+      <section id="worlds">
+        <h2>Three JavaScript worlds</h2>
+        <p class="lead">These cannot call each other’s variables directly. They communicate with <span class="fn">chrome.runtime.sendMessage</span>, <span class="fn">chrome.storage</span>, or shared DOM (content script only).</p>
+        <div class="diagram-wrap"><pre class="mermaid">
+flowchart LR
+  subgraph W1["① Page scripts"]
+    P[Site React/Vue/jQuery]
+  end
+  subgraph W2["② Content script"]
+    CS[content-script.js]
+    OA[OverlayApp React]
+    CS --> OA
+  end
+  subgraph W3["③ Extension contexts"]
+    BG[background.js SW]
+    POP[popup.html]
+    OS[offscreen.html]
+  end
+  P -.->|same DOM, isolated JS| CS
+  CS <-->|messages| BG
+  BG <-->|messages| OS
+  POP <-->|storage.sync| CS
+        </pre></div>
+        <table class="map">
+          <thead><tr><th>World</th><th>Can access page DOM?</th><th>Can access chrome.* APIs?</th><th>Syncle uses it for</th></tr></thead>
+          <tbody>
+            <tr><td>Page (host site)</td><td>Yes (its own)</td><td>No</td><td>Untrusted — Syncle does not run code here</td></tr>
+            <tr><td>Content script</td><td>Yes (inject UI)</td><td>Partial (tabs, runtime, storage)</td><td>Lasso, bubbles, calling background</td></tr>
+            <tr><td>Service worker</td><td>No</td><td>Yes</td><td>Fetch to API, captureVisibleTab</td></tr>
+            <tr><td>Extension popup</td><td>No</td><td>Yes</td><td>Settings, Google sign-in</td></tr>
+            <tr><td>Offscreen document</td><td>No (hidden page)</td><td>Via messages</td><td>Canvas crop of screenshot</td></tr>
+          </tbody>
+        </table>
+        <div class="callout warn">
+          <b>Why Shadow DOM?</b> Content script CSS would fight the host page. Syncle mounts React inside
+          <code>#draw-on-web-root-host</code> shadow root so lasso styles stay predictable. Popups/toolbar
+          portal to light-DOM mounts so <code>pointer-events</code> work correctly.
+        </div>
+      </section>
+
+      <section id="required">
+        <h2>What you need to create an extension</h2>
+        <p class="lead">Minimum viable Chrome extension checklist (Syncle includes all of these plus a backend).</p>
+        <table class="map">
+          <thead><tr><th>Required</th><th>File / concept</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>✅ Always</td><td class="file">manifest.json</td><td>Name, version, permissions, which scripts load where</td></tr>
+            <tr><td>✅ One of</td><td>background / service_worker</td><td>Long-lived tasks: network, alarms, tab APIs (MV3 = service worker)</td></tr>
+            <tr><td>✅ One of</td><td>content_scripts</td><td>JS injected into web pages the user visits</td></tr>
+            <tr><td>◻ Optional</td><td>action.default_popup</td><td>UI when user clicks toolbar icon</td></tr>
+            <tr><td>◻ Optional</td><td>icons</td><td>Toolbar / store listing</td></tr>
+            <tr><td>◻ As needed</td><td>host_permissions</td><td>Which URLs the extension may fetch or inject into</td></tr>
+            <tr><td>◻ As needed</td><td>permissions</td><td>tabs, storage, scripting, offscreen, identity…</td></tr>
+          </tbody>
+        </table>
+        <h3>Syncle’s manifest (simplified)</h3>
+        <div class="tree">manifest.json
+├── manifest_version: 3
+├── content_scripts → ["content-script.js"] on &lt;all_urls&gt;
+├── background.service_worker → "background.js"
+├── action.default_popup → "popup.html"
+├── permissions → tabs, activeTab, scripting, offscreen, storage, identity
+├── host_permissions → &lt;all_urls&gt;, localhost:3001 (API)
+└── web_accessible_resources → offscreen.html</div>
+        <h3>Dev workflow</h3>
+        <ol>
+          <li>Write source in <span class="file">src/</span> and <span class="file">public/</span></li>
+          <li>Run <code>npm run build</code> → output in <span class="file">dist/</span></li>
+          <li>Chrome → Extensions → Load unpacked → select <span class="file">dist/</span></li>
+          <li>After code changes: rebuild, then click Reload on the extension card</li>
+        </ol>
+      </section>
+
+      <section id="pieces">
+        <h2>MV3 pieces — what each part does in Syncle</h2>
+
+        <h3>manifest.json</h3>
+        <p class="lead">The contract Chrome enforces. If it’s not declared here, your code cannot do it.</p>
+        <table class="map">
+          <thead><tr><th>Field</th><th>Syncle value</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td>content_scripts</td><td>content-script.js @ document_end</td><td>Auto-inject overlay on every page load</td></tr>
+            <tr><td>background</td><td>background.js</td><td>Service worker — no DOM, event-driven</td></tr>
+            <tr><td>action.popup</td><td>popup.html</td><td>Settings panel from toolbar icon</td></tr>
+            <tr><td>permissions.offscreen</td><td>—</td><td>Allows hidden offscreen.html for image processing</td></tr>
+            <tr><td>permissions.tabs</td><td>—</td><td>captureVisibleTab for screenshots</td></tr>
+            <tr><td>host_permissions</td><td>&lt;all_urls&gt; + API host</td><td>Inject + call syncle-services</td></tr>
+          </tbody>
+        </table>
+
+        <h3>background.js (service worker)</h3>
+        <p class="lead">Runs in the extension origin, <b>not</b> on the webpage. Wakes up, handles messages, may sleep again.</p>
+        <table class="map">
+          <thead><tr><th>Message type</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>SYNCLE_FETCH</code></td><td>Proxies HTTP to syncle-services (avoids page CORS / carries auth from extension)</td></tr>
+            <tr><td><code>EXTRACTION_CAPTURE_CROP</code></td><td>captureVisibleTab → send PNG to offscreen → return JPEG base64 crop</td></tr>
+            <tr><td><code>PING</code></td><td>Health check</td></tr>
+          </tbody>
+        </table>
+
+        <h3>content-script.js (built from src/)</h3>
+        <p class="lead">The “app on the page.” Bundled by Vite as one IIFE file (MV3 disallows multi-chunk content scripts easily).</p>
+        <ul>
+          <li>Entry: <span class="file">src/content-script.jsx</span> → mounts <span class="fn">OverlayApp</span></li>
+          <li>Can read/modify DOM (lasso canvases, portals)</li>
+          <li>Cannot access page JS variables (isolated world)</li>
+          <li>Sends messages to background for fetch + screenshots</li>
+        </ul>
+
+        <h3>popup.html + PopupApp</h3>
+        <p class="lead">Small UI when you click the Syncle icon. Separate React app (second Vite build).</p>
+        <ul>
+          <li>Enable/disable drawing, lasso theme, auto-collapse</li>
+          <li>Google sign-in → stores JWT in <code>chrome.storage.local</code></li>
+          <li>Writes <code>chrome.storage.sync</code> → content script listens via <span class="fn">chrome.storage.onChanged</span></li>
+        </ul>
+
+        <h3>offscreen.html + offscreen.js</h3>
+        <p class="lead">MV3 service workers cannot use DOM APIs like <code>canvas</code> or <code>Image</code>. Chrome provides a hidden document for that.</p>
+        <ul>
+          <li>Background captures full-tab PNG</li>
+          <li>Offscreen loads image, crops to selection rect, encodes JPEG</li>
+          <li>Returns base64 to content script via message chain</li>
+        </ul>
+
+        <h3>Messaging pattern (how worlds talk)</h3>
+        <div class="diagram-wrap"><pre class="mermaid">
+sequenceDiagram
+  participant CS as Content script
+  participant BG as background.js
+  participant OS as offscreen.js
+  CS->>BG: chrome.runtime.sendMessage
+  BG->>OS: chrome.runtime.sendMessage
+  OS-->>BG: sendResponse (async)
+  BG-->>CS: sendResponse
+  Note over CS,BG: return true keeps channel open for async
+        </pre></div>
+      </section>
+
+      <section id="glossary">
+        <h2>Every file explained (syncle-ui)</h2>
+        <p class="lead">Click a folder to expand. Paths are under <code>syncle-ui/</code> unless noted.</p>
+
+        <details class="file-group" open>
+          <summary>public/ — shipped as-is to dist/</summary>
+          <p><span class="file">manifest.json</span> — Extension manifest (copied/processed by copy-manifest.mjs for Google OAuth client id).</p>
+          <p><span class="file">background.js</span> — MV3 service worker: message router, tab capture, offscreen lifecycle.</p>
+          <p><span class="file">offscreen.html</span> + <span class="file">offscreen.js</span> — Hidden page for canvas crop/resize.</p>
+          <p><span class="file">icon.png</span> — Toolbar icon.</p>
+        </details>
+
+        <details class="file-group" open>
+          <summary>src/ — application source (bundled by Vite)</summary>
+          <p><span class="file">content-script.jsx</span> — Injection entry: shadow host, CSS, React root, portal mounts.</p>
+          <p><span class="file">OverlayApp.jsx</span> — Core UX: lasso drawing, popups, hotkey, AI chat trigger, undo/clear.</p>
+          <p><span class="file">overlay.css</span> — Canvas + floating toolbar arc styles.</p>
+        </details>
+
+        <details class="file-group">
+          <summary>src/components/</summary>
+          <p><span class="file">FloatingToolbar.jsx</span> — Draggable radial menu (modes, undo, clear).</p>
+          <p><span class="file">PopupBubble.jsx</span> — Per-selection chat bubble UI (dismiss, minimize, expand).</p>
+          <p><span class="file">popupBubble.css</span> — Bubble layout, morph animations, pointer-events.</p>
+          <p><span class="file">productModes.js</span> — ai / clips / notes mode constants.</p>
+        </details>
+
+        <details class="file-group">
+          <summary>src/extraction/ — visual capture only (no DOM text mining)</summary>
+          <p><span class="file">runExtraction.js</span> — Bridge: build context → register → return IDs.</p>
+          <p><span class="file">buildExtractedContext.ts</span> — Rect from lasso points, page title/meta, request screenshot crop.</p>
+          <p><span class="file">optimizePayload.ts</span> — Shape payload for POST /context/*/register.</p>
+          <p><span class="file">screenshot/captureClient.ts</span> — sendMessage EXTRACTION_CAPTURE_CROP.</p>
+          <p><span class="file">pageContext/</span> — URL fingerprint, session cache (avoid re-registering page).</p>
+          <p><span class="file">geometry/rect.ts</span> — Bounding box from polygon points.</p>
+          <p><span class="file">constants.ts</span> — Schema version, message types, screenshot quality.</p>
+          <p><span class="file">types.ts</span> — TypeScript types for ExtractedContext.</p>
+        </details>
+
+        <details class="file-group">
+          <summary>src/api/</summary>
+          <p><span class="file">apiFetch.js</span> — HTTP via background SYNCLE_FETCH (+ direct fallback).</p>
+          <p><span class="file">registerContext.js</span> — POST page/selection context to backend.</p>
+          <p><span class="file">chatClient.js</span> — POST /chat for AI reply.</p>
+        </details>
+
+        <details class="file-group">
+          <summary>src/auth/ + src/popup/</summary>
+          <p><span class="file">popup/PopupApp.jsx</span> — Extension popup UI (settings + login).</p>
+          <p><span class="file">popup/main.jsx</span> — React entry for popup.</p>
+          <p><span class="file">auth/session.js</span> — Read/write JWT session.</p>
+          <p><span class="file">auth/googleSignIn.js</span> — chrome.identity OAuth flow.</p>
+          <p><span class="file">auth/oauthConfig.js</span> — Whether Google client id is configured.</p>
+        </details>
+
+        <details class="file-group">
+          <summary>src/utils/</summary>
+          <p><span class="file">anchorCoords.js</span> — Pin lasso/popup to DOM anchor as user scrolls.</p>
+          <p><span class="file">scrollBubble.js</span> — Auto-collapse bubbles after scroll distance.</p>
+          <p><span class="file">settings.js</span> — Load/save chrome.storage.sync settings.</p>
+          <p><span class="file">lassoThemes.js</span> — Stroke/fill color presets.</p>
+          <p><span class="file">bboxOf.js</span>, <span class="file">uid.js</span>, <span class="file">pageSize.js</span> — Small geometry/id helpers.</p>
+        </details>
+
+        <details class="file-group">
+          <summary>src/config/</summary>
+          <p><span class="file">api.js</span> — API base URL from Vite env.</p>
+          <p><span class="file">features.js</span> — Feature flags: CLOUD_SYNC_ENABLED, AI_CHAT_ENABLED.</p>
+        </details>
+
+        <details class="file-group">
+          <summary>Build / config files</summary>
+          <p><span class="file">vite.config.js</span> — Builds popup.html → dist/assets/*.</p>
+          <p><span class="file">vite.content.config.js</span> — Builds single content-script.js IIFE.</p>
+          <p><span class="file">popup.html</span> — Popup entry HTML.</p>
+          <p><span class="file">scripts/copy-manifest.mjs</span> — Copies manifest + injects oauth2 from .env.</p>
+          <p><span class="file">package.json</span> — build = popup + content + copy ext files.</p>
+        </details>
+
+        <details class="file-group">
+          <summary>dist/ — load this folder in Chrome</summary>
+          <p>Generated output: <span class="file">content-script.js</span>, <span class="file">popup.html</span>, <span class="file">background.js</span>, <span class="file">manifest.json</span>, etc. Never edit dist by hand — always rebuild.</p>
+        </details>
+
+        <div class="callout">
+          <b>Related repo:</b> <span class="file">syncle-services/</span> is the Node API (not part of the extension package).
+          The extension only talks to it over HTTP. See syncle-services for /chat and /context routes.
+        </div>
+      </section>
+
+      <section id="overview">
+        <h2>Syncle overview — end-to-end flow</h2>
+        <p class="lead">
+          Syncle is a Chrome MV3 extension. On every page it injects a content script that mounts
+          <span class="fn">OverlayApp</span> in a Shadow DOM. Users hold <b>⌘/Ctrl</b>, draw a lasso,
+          get a screenshot crop of the region, register context with <span class="file">syncle-services</span>,
+          and receive an AI explanation in a pinned popup bubble.
+        </p>
+        <div class="pill-row" id="overview-pills">
+          <a
+            class="pill accent"
+            href="#bootstrap"
+            data-detail="&lt;strong&gt;content-script.js&lt;/strong&gt; (built from &lt;span class='file'&gt;src/content-script.jsx&lt;/span&gt;) — Chrome injects this on every page. It creates the Shadow DOM host and mounts React. See &lt;a href='#bootstrap'&gt;§1 Bootstrap&lt;/a&gt;."
+          >content-script.js</a>
+          <a
+            class="pill"
+            href="#fullpage"
+            data-detail="&lt;strong&gt;Full-page overlay&lt;/strong&gt; — Fixed host + viewport-sized canvases + &lt;code&gt;pointer-events: none&lt;/code&gt; until ⌘/Ctrl. Window-level pointer listeners draw anywhere on the visible page. See &lt;a href='#fullpage'&gt;§2 Draw on whole page&lt;/a&gt;."
+          >whole-page draw</a>
+          <a
+            class="pill"
+            href="#anchor"
+            data-detail="&lt;strong&gt;DOM anchor + offsets&lt;/strong&gt; — Each lasso pins to a page element; &lt;span class='fn'&gt;clientPointsFromAnchor&lt;/span&gt; recomputes screen position on scroll. See &lt;a href='#anchor'&gt;§3 Stick while scrolling&lt;/a&gt;."
+          >scroll anchoring</a>
+          <a
+            class="pill"
+            href="#lasso"
+            data-detail="&lt;strong&gt;OverlayApp.jsx&lt;/strong&gt; — Main React UI: lasso drawing, popup bubbles, hotkey, undo/clear, AI chat trigger. Portals toolbar to light DOM. See &lt;a href='#lasso'&gt;§4 Lasso draw&lt;/a&gt;."
+          >OverlayApp.jsx</a>
+          <a
+            class="pill"
+            href="#screenshot"
+            data-detail="&lt;strong&gt;background.js&lt;/strong&gt; — MV3 service worker. Handles &lt;code&gt;SYNCLE_FETCH&lt;/code&gt; (API proxy) and &lt;code&gt;EXTRACTION_CAPTURE_CROP&lt;/code&gt; (tab screenshot → offscreen). See &lt;a href='#screenshot'&gt;§6 Screenshot crop&lt;/a&gt; and &lt;a href='#api'&gt;§11 API layer&lt;/a&gt;."
+          >background.js</a>
+          <a
+            class="pill"
+            href="#screenshot"
+            data-detail="&lt;strong&gt;offscreen.js&lt;/strong&gt; — Hidden document with canvas APIs. Crops the full-tab PNG to the lasso rect and returns JPEG base64. See &lt;a href='#screenshot'&gt;§6 Screenshot crop&lt;/a&gt;."
+          >offscreen.js</a>
+          <a
+            class="pill"
+            href="#capture"
+            data-detail="&lt;strong&gt;visual-primary&lt;/strong&gt; — Extraction strategy: no DOM text candidates; AI uses the screenshot crop + page title/meta. Set in &lt;span class='file'&gt;buildExtractedContext.ts&lt;/span&gt;. See &lt;a href='#capture'&gt;§5 Capture pipeline&lt;/a&gt;."
+          >visual-primary</a>
+        </div>
+        <div class="detail-panel" id="detail-overview-pills">
+          Click a chip above to jump to that flow and see what it does.
+        </div>
+        <div class="legend">
+          <div><b>Page world</b> Content script + React overlay (lasso, bubbles, toolbar portal)</div>
+          <div><b>Extension</b> Service worker routes fetch &amp; tab capture</div>
+          <div><b>Offscreen</b> Canvas crop/resize of full-tab screenshot</div>
+          <div><b>Backend</b> localhost:3001 — register + OpenAI chat</div>
+        </div>
+        <div class="diagram-wrap">
+          <pre class="mermaid">
+flowchart TB
+  subgraph Page["Web page"]
+    CS[content-script.jsx]
+    OA[OverlayApp.jsx]
+    TB[FloatingToolbar]
+    PB[PopupBubble]
+    CS --> OA
+    OA --> TB
+    OA --> PB
+  end
+  subgraph Ext["Chrome extension"]
+    BG[background.js]
+    OS[offscreen.js]
+    POP[popup.html / PopupApp]
+    BG --> OS
+  end
+  subgraph API["syncle-services :3001"]
+    REG["/context/*/register"]
+    CHAT["/chat"]
+  end
+  OA -->|EXTRACTION_CAPTURE_CROP| BG
+  BG --> OS
+  OA -->|apiFetch SYNCLE_FETCH| BG
+  BG --> REG
+  BG --> CHAT
+  POP -.->|chrome.storage.sync| OA
+          </pre>
+        </div>
+      </section>
+
+      <section id="bootstrap">
+        <h2>1. Bootstrap — how the overlay loads</h2>
+        <p class="lead">Triggered once per tab when the content script bundle runs at <code>document_end</code>.</p>
+        <div class="diagram-wrap"><pre class="mermaid">
+sequenceDiagram
+  participant M as manifest.json
+  participant CS as content-script.jsx
+  participant H as Shadow host
+  participant OA as OverlayApp
+  M->>CS: inject content-script.js
+  CS->>CS: guard __DRAW_ON_WEB_MOUNTED__
+  CS->>H: create #draw-on-web-root-host
+  CS->>OA: createRoot(shadow).render(OverlayApp)
+  CS->>CS: portal mounts for toolbar + popups
+        </pre></div>
+        <ol class="steps" data-flow="bootstrap">
+          <li data-detail="manifest.json lists content_scripts → dist/content-script.js (Vite bundle of src/).">
+            <span class="num">1</span>
+            <div><span class="file">public/manifest.json</span><div class="desc">Matches &lt;all_urls&gt;, run_at document_end</div></div>
+          </li>
+          <li data-detail="content-script.jsx IIFE checks window.__DRAW_ON_WEB_MOUNTED__ to prevent double inject.">
+            <span class="num">2</span>
+            <div><span class="fn">content-script.jsx</span> <span class="fn">inject()</span><div class="desc">Creates shadow host + light-DOM overlay/toolbar mounts</div></div>
+          </li>
+          <li data-detail="Inline CSS from overlay.css + popupBubble.css injected into shadow and page (for portaled bubbles).">
+            <span class="num">3</span>
+            <div><span class="file">overlay.css</span>, <span class="file">popupBubble.css</span><div class="desc">Style isolation + bubble pointer-events</div></div>
+          </li>
+          <li data-detail="React 19 createRoot renders OverlayApp with toolbarMount=#syncle-overlay-mount and toolbarControlsMount=#syncle-toolbar-mount.">
+            <span class="num">4</span>
+            <div><span class="fn">OverlayApp</span><div class="desc">Main state: lasso polys, popups, hotkey, product mode</div></div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-bootstrap">Click a step above for details.</div>
+      </section>
+
+      <section id="fullpage">
+        <h2>2. Draw on the whole page — full-viewport overlay</h2>
+        <p class="lead">
+          Syncle does not draw inside a small widget. It mounts a <b>viewport-sized layer</b> on top of every page so you can lasso anywhere you can see — while the page underneath stays clickable until you hold ⌘/Ctrl.
+        </p>
+        <div class="callout">
+          <b>Key idea:</b> The overlay is <code>position: fixed</code> and sized to the <b>visual viewport</b> (handles mobile pinch-zoom and browser chrome). Pointer listeners attach to <code>window</code> in capture phase, so drawing works over any site layout, iframe sibling, or scroll position — as long as the point is on screen.
+        </div>
+        <div class="diagram-wrap"><pre class="mermaid">
+flowchart TB
+  subgraph Inject["content-script.jsx"]
+    H["#draw-on-web-root-host<br/>fixed inset 0 · pointer-events none"]
+    SH[Shadow DOM + .draw-root]
+    OA[OverlayApp]
+    H --> SH --> OA
+  end
+  subgraph Layers["OverlayApp canvases"]
+    INK[inkCanvas — committed lassos]
+    LIVE[liveCanvas — stroke preview]
+  end
+  subgraph Input["When ⌘/Ctrl held"]
+    HK[hotkeyReady + draw cursor on html/body]
+    WIN["window pointerdown/move/up<br/>capture: true"]
+  end
+  OA --> INK
+  OA --> LIVE
+  HK --> WIN
+  WIN --> LIVE
+        </pre></div>
+        <h3>Layer stack (bottom → top)</h3>
+        <table class="map">
+          <thead><tr><th>Layer</th><th>DOM / file</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Host page</td><td>Site HTML</td><td>Normal clicks, scroll, inputs — untouched by default</td></tr>
+            <tr><td>Shadow host</td><td><span class="file">content-script.jsx</span> <code>#draw-on-web-root-host</code></td><td><code>fixed; inset:0; 100vw×100vh; pointer-events:none; z-index:2147483646</code></td></tr>
+            <tr><td>React root</td><td><span class="file">OverlayApp.jsx</span> <code>.draw-root</code></td><td><code>fixed; inset:0</code> sized to <span class="fn">getViewportSize()</span> (uses <code>visualViewport</code>)</td></tr>
+            <tr><td>Ink + live canvas</td><td>Two <code>&lt;canvas&gt;</code> elements</td><td>CSS size = viewport; bitmap scaled by <code>devicePixelRatio</code></td></tr>
+            <tr><td>Toolbar / bubbles</td><td>Portaled to light DOM mounts</td><td><code>pointer-events: auto</code> only on interactive UI</td></tr>
+          </tbody>
+        </table>
+        <h3>Why the page stays usable</h3>
+        <p class="lead">
+          Almost everything uses <code>pointer-events: none</code> (<span class="file">overlay.css</span>, host, canvas). The extension does <b>not</b> block clicks until you hold the hotkey and start a stroke. Listeners are on <code>window</code>, not on a full-screen blocking div — so there is no invisible glass pane stealing events when you are not drawing.
+        </p>
+        <div class="flow-controls">
+          <button class="flow-btn primary" data-play="fullpage">▶ Play step-by-step</button>
+          <button class="flow-btn" data-reset="fullpage">Reset</button>
+        </div>
+        <ol class="steps" data-flow="fullpage">
+          <li data-detail="content-script.jsx appends a fixed full-viewport host and separate light-DOM mounts for toolbar + bubbles. React renders inside shadow; CSS from overlay.css is inlined twice (shadow + page) for portaled nodes.">
+            <span class="num">1</span>
+            <div><span class="fn">inject()</span> full-viewport host<div class="desc">#draw-on-web-root-host covers the tab</div></div>
+          </li>
+          <li data-detail="resizeCanvases() reads getViewportSize() (visualViewport or innerWidth/Height), sets canvas CSS width/height, and scales the 2D context by devicePixelRatio. ResizeObserver on document.documentElement + window/visualViewport resize keep the layer full-screen.">
+            <span class="num">2</span>
+            <div><span class="fn">resizeCanvases</span><div class="desc">Canvases always match visible viewport</div></div>
+          </li>
+          <li data-detail="keydown/keyup (capture): Meta or Ctrl sets hotkeyReady. When drawingEnabled && AI mode && hotkeyReady, documentElement and body get AI_DRAW_CURSOR (custom crosshair+sparkle) with !important.">
+            <span class="num">3</span>
+            <div>Hold <b>⌘</b> or <b>Ctrl</b><div class="desc">Cursor shows draw mode; page still receives clicks if you don't drag</div></div>
+          </li>
+          <li data-detail="pointerdown on window (capture): requires drawingEnabledRef, isAiProductMode, isHotkey(e), left button, and target NOT inside .popup-bubble, .syncle-floating-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount. Records clientX/Y and pageX/Y. drawLive() previews on liveCanvas.">
+            <span class="num">4</span>
+            <div><span class="fn">start</span> anywhere on screen<div class="desc">Drag across the whole visible page</div></div>
+          </li>
+          <li data-detail="pointermove appends points (min 2px apart). If hotkey released mid-stroke → finishCommit(). pointerup / pointercancel / Escape end or cancel. Committed shapes paint on inkCanvas; live canvas clears.">
+            <span class="num">5</span>
+            <div><span class="fn">move</span> / <span class="fn">finishCommit</span><div class="desc">Free-hand lasso over full viewport</div></div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-fullpage">Click a step or press Play.</div>
+        <div class="tree">content-script.jsx
+├── #draw-on-web-root-host     fixed inset 0, pointer-events none
+├── #syncle-overlay-mount      portal target for PopupBubble
+├── #syncle-toolbar-mount      portal target for FloatingToolbar
+└── shadow → OverlayApp
+    ├── inkCanvasRef           committed polygons (redrawInk)
+    ├── liveCanvasRef          in-progress stroke (drawLive)
+    └── window listeners       capture phase, whole tab</div>
+      </section>
+
+      <section id="anchor">
+        <h2>3. Stick with the page — scroll anchoring</h2>
+        <p class="lead">
+          Lassos are not painted in fixed screen coordinates forever. On commit, Syncle <b>pins each polygon to a DOM element</b> under the selection and stores corner <b>offsets</b> relative to that element. On every scroll or resize, it recomputes screen positions from the anchor's current <code>getBoundingClientRect()</code> — so the highlight and chat bubble move with the content.
+        </p>
+        <div class="diagram-wrap"><pre class="mermaid">
+sequenceDiagram
+  participant U as User commits lasso
+  participant OA as OverlayApp
+  participant AC as anchorCoords.js
+  participant DOM as Page element (anchor)
+  participant SC as scroll / resize
+  U->>OA: finishCommit (≥3 points)
+  OA->>AC: pickAnchor(centroid)
+  AC->>DOM: elementsFromPoint → stable block
+  OA->>AC: offsetsFromClientPoints(anchor, clientPts)
+  OA->>OA: store poly { offsets, pts page fallback, anchor }
+  SC->>OA: scroll (capture) / rAF loop
+  OA->>AC: clientPointsFromAnchor(anchor, offsets)
+  AC->>DOM: getBoundingClientRect()
+  AC-->>OA: viewport x,y per corner
+  OA->>OA: redrawInk() + reposition PopupBubble
+        </pre></div>
+        <h3>Anchor pick — what element we attach to</h3>
+        <p class="lead"><span class="fn">pickAnchor(clientX, clientY)</span> uses <code>document.elementsFromPoint</code> at the lasso centroid, skipping Syncle's own hosts and bubbles. It walks up parents and prefers a block at least 48×24px, skipping <code>position: fixed</code> and <code>sticky</code> nodes so the anchor is usually a card, paragraph, or table cell — not the viewport chrome.</p>
+        <table class="map">
+          <thead><tr><th>Stored per lasso</th><th>Format</th><th>Used when</th></tr></thead>
+          <tbody>
+            <tr><td><code>offsets</code></td><td><code>{ dx, dy }</code> from anchor top-left</td><td>Anchor still in DOM (<code>isConnected</code>)</td></tr>
+            <tr><td><code>pts</code> (page coords)</td><td><code>{ x: pageX, y: pageY }</code></td><td>Fallback if anchor removed from DOM</td></tr>
+            <tr><td><code>anchor</code></td><td>Element reference in <code>anchorsRef</code></td><td>Live lookup each frame via <span class="fn">getAnchor(id)</span></td></tr>
+            <tr><td><code>popupOffset</code></td><td><code>{ dx, dy }</code> from anchor</td><td>Bubble placement beside bbox</td></tr>
+          </tbody>
+        </table>
+        <div class="flow-controls">
+          <button class="flow-btn primary" data-play="anchor">▶ Play step-by-step</button>
+          <button class="flow-btn" data-reset="anchor">Reset</button>
+        </div>
+        <ol class="steps" data-flow="anchor">
+          <li data-detail="finishCommit averages clientX/clientY → centroid, then pickAnchor(cx, cy). offsetsFromClientPoints stores each corner relative to anchor.getBoundingClientRect(). pagePts (pageX/pageY) saved as fallback.">
+            <span class="num">1</span>
+            <div><span class="fn">finishCommit</span> → <span class="fn">pickAnchor</span><div class="desc">Pin lasso to page content</div></div>
+          </li>
+          <li data-detail="redrawInk loops polysRef: clientPointsFromAnchor(anchor, offsets, pagePts) → if anchor connected, left+dx, top+dy; else pagePts minus scrollX/Y. Strokes drawn in viewport space on ink canvas.">
+            <span class="num">2</span>
+            <div><span class="fn">clientPointsFromAnchor</span><div class="desc">Map stored offsets → screen pixels</div></div>
+          </li>
+          <li data-detail="document.addEventListener('scroll', schedule, { capture: true }) — fires for nested scrollers too. visualViewport scroll/resize also scheduled. rAF loop calls syncFrame when polys or popups exist.">
+            <span class="num">3</span>
+            <div><span class="fn">syncFrame</span> on scroll<div class="desc">Ink + bubbles track the anchor every frame</div></div>
+          </li>
+          <li data-detail="PopupBubble position uses clientPointFromAnchor(anchor, popupOffset). getSelectionCentroid drives compact chip placement. attachScrollBubbleController may collapse bubbles after ~100px scroll (settings).">
+            <span class="num">4</span>
+            <div>Bubbles follow anchor<div class="desc">utils/scrollBubble.js optional auto-collapse</div></div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-anchor">Click a step or press Play.</div>
+        <div class="callout warn">
+          <b>Viewport overlay vs document coordinates:</b> The draw layer is fixed to the <em>viewport</em>, but committed shapes are anchored to <em>document content</em>. That is why scroll recomputation is required — without anchors, lassos would slide off the page when you scroll.
+        </div>
+      </section>
+
+      <section id="lasso">
+        <h2>4. Lasso draw — pointer → polygon</h2>
+        <p class="lead">Drawing only works in AI product mode when drawing is enabled and ⌘/Ctrl is held.</p>
+        <div class="flow-controls">
+          <button class="flow-btn primary" data-play="lasso">▶ Play step-by-step</button>
+          <button class="flow-btn" data-reset="lasso">Reset</button>
+        </div>
+        <div class="diagram-wrap"><pre class="mermaid">
+stateDiagram-v2
+  [*] --> Idle
+  Idle --> HotkeyReady: keydown Meta/Ctrl
+  HotkeyReady --> Drawing: pointerdown + hotkey
+  Drawing --> Drawing: pointermove
+  Drawing --> Commit: pointerup (≥3 points)
+  HotkeyReady --> Idle: keyup
+  Drawing --> Cancel: Escape
+  Commit --> Idle: finishCommit()
+        </pre></div>
+        <ol class="steps" data-flow="lasso">
+          <li data-detail="useEffect listens keydown/keyup (capture). isHotkey(e) sets hotkeyReady. Separate effect applies AI_DRAW_CURSOR to document when hotkeyReady && AI mode.">
+            <span class="num">1</span>
+            <div><span class="fn">OverlayApp</span> hotkey listeners<div class="desc">Meta/Ctrl → crosshair + sparkle cursor</div></div>
+          </li>
+          <li data-detail="start(e): requires drawingEnabledRef, isAiProductMode, isHotkey(e), left button, and NOT target.closest(INTERACTIVE_OVERLAY_SELECTOR). Pushes first point to pointsRef.">
+            <span class="num">2</span>
+            <div><span class="fn">start</span> pointerdown<div class="desc">Begins live stroke on liveCanvasRef</div></div>
+          </li>
+          <li data-detail="move(e): if hotkey released → finishCommit(). Appends points with min distance 2px. drawLive() strokes path.">
+            <span class="num">3</span>
+            <div><span class="fn">move</span> + <span class="fn">drawLive</span><div class="desc">Live preview canvas</div></div>
+          </li>
+          <li data-detail="finishCommit(): if ≥3 points → uid(), pickAnchor(cx,cy), store poly in polysRef + anchor in anchorsRef, redrawInk(), create popup state, schedule runSelectionExtraction via double rAF.">
+            <span class="num">4</span>
+            <div><span class="fn">finishCommit</span><div class="desc">Commits lasso + spawns popup</div></div>
+          </li>
+          <li data-detail="After commit, scroll anchoring keeps ink aligned — see §3 Stick while scrolling. syncFrame() + anchorCoords.js reproject corners each frame.">
+            <span class="num">5</span>
+            <div><span class="fn">syncFrame</span> → <a href="#anchor">§3 anchor</a><div class="desc">Selections stay pinned while scrolling</div></div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-lasso">Click a step or press Play.</div>
+      </section>
+
+      <section id="capture">
+        <h2>5. Capture pipeline — after lasso closes</h2>
+        <p class="lead">No DOM text extraction. Only bounding rect, page meta, and JPEG crop.</p>
+        <div class="diagram-wrap"><pre class="mermaid">
+flowchart LR
+  A[finishCommit] --> B[runSelectionExtraction]
+  B --> C[buildExtractedContextFromPoints]
+  C --> D[rectFromPoints]
+  C --> E[readPageMeta]
+  C --> F[requestCroppedScreenshot]
+  C --> G[buildVisualEvidence]
+  B --> H[ensureContextRegistered]
+  H --> I[optimizeForAi]
+  B --> J[requestAiReply]
+        </pre></div>
+        <ol class="steps" data-flow="capture">
+          <li data-detail="runExtraction.js: calls buildExtractedContextFromPoints(clientPts), then if CLOUD_SYNC_ENABLED calls ensureContextRegistered(extracted, selectionId). Returns extracted with contextIds.">
+            <span class="num">1</span>
+            <div><span class="file">runExtraction.js</span> <span class="fn">runSelectionExtraction</span></div>
+          </li>
+          <li data-detail="rectFromPoints: min/max of client X/Y → SelectionRect {left,top,right,bottom,width,height}.">
+            <span class="num">2</span>
+            <div><span class="file">geometry/rect.ts</span> <span class="fn">rectFromPoints</span></div>
+          </li>
+          <li data-detail="readPageMeta: document.title, first h1, meta description — no element traversal inside lasso.">
+            <span class="num">3</span>
+            <div><span class="fn">buildExtractedContext.ts</span> <span class="fn">readPageMeta</span></div>
+          </li>
+          <li data-detail="requestCroppedScreenshot → chrome.runtime.sendMessage EXTRACTION_CAPTURE_CROP. Builds SelectionEvidence { candidates: [], cropImageBase64, hasVisual, evidenceConfidence }.">
+            <span class="num">4</span>
+            <div><span class="file">screenshot/captureClient.ts</span> → evidence</div>
+          </li>
+          <li data-detail="OverlayApp .then: sets extractStatus ready, contextIds, calls requestAiReply if register succeeded.">
+            <span class="num">5</span>
+            <div><span class="fn">OverlayApp</span> popup state update</div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-capture">Click a step for call detail.</div>
+        <h3>ExtractedContext shape</h3>
+        <div class="tree">ExtractedContext
+├── source { url, title, domain, type: "webpage" }
+├── focus { cropImageBase64, extractionMethod: "media-crop" | "visual-fallback" }
+├── context { pageTitle, h1?, metaDescription? }
+├── meta { selectionRect, viewport, extractionStrategy: "visual-primary" }
+└── selectionEvidence { candidates: [], cropImageBase64, hasVisual, evidenceConfidence }</div>
+      </section>
+
+      <section id="screenshot">
+        <h2>6. Screenshot crop — extension ↔ offscreen</h2>
+        <div class="diagram-wrap"><pre class="mermaid">
+sequenceDiagram
+  participant CC as captureClient.ts
+  participant BG as background.js
+  participant Tab as chrome.tabs.captureVisibleTab
+  participant OS as offscreen.js
+  CC->>BG: EXTRACTION_CAPTURE_CROP { rect, dpr }
+  BG->>Tab: full viewport PNG dataUrl
+  BG->>OS: OFFSCREEN_CROP_RECT
+  OS->>OS: cropRectDataUrl → JPEG base64
+  OS-->>BG: cropImageBase64
+  BG-->>CC: { ok, cropImageBase64 }
+        </pre></div>
+        <table class="map">
+          <thead><tr><th>Function</th><th>File</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td class="fn">requestCroppedScreenshot</td><td class="file">screenshot/captureClient.ts</td><td>Content script → background message</td></tr>
+            <tr><td class="fn">ensureOffscreen</td><td class="file">background.js</td><td>Creates offscreen document if missing</td></tr>
+            <tr><td class="fn">captureVisibleTab</td><td class="file">background.js</td><td>Full tab bitmap (device pixels)</td></tr>
+            <tr><td class="fn">cropRectDataUrl</td><td class="file">offscreen.js</td><td>Scale rect by DPR, draw to canvas, JPEG encode</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="register">
+        <h2>7. Cloud register — page + selection IDs</h2>
+        <p class="lead">When <code>CLOUD_SYNC_ENABLED</code> is true, each lasso registers with syncle-services. Crop base64 is stripped from register payload (hasImage flag only) to keep requests small.</p>
+        <div class="diagram-wrap"><pre class="mermaid">
+flowchart TD
+  R[ensureContextRegistered] --> O[optimizeForAi]
+  O --> P{page session cached?}
+  P -->|no| FP[POST /context/page/register]
+  P -->|yes| FS[POST /context/selection/register]
+  FP --> C[savePageSession + saveSelectionSession]
+  FS --> C
+  C --> IDs[pageContextId + selectionContextId]
+        </pre></div>
+        <ol class="steps" data-flow="register">
+          <li data-detail="getPageIdentity: canonical URL (strip tracking params) + SHA-256 fingerprint from url|title|h1|meta.">
+            <span class="num">1</span>
+            <div><span class="file">pageContext/canonicalUrl.ts</span> <span class="fn">getPageIdentity</span></div>
+          </li>
+          <li data-detail="optimizeForAi: buildSelectionBody with selectionShape visual_selection, contextLens from page meta, attaches selectionEvidence. First pin includes buildPageContext.">
+            <span class="num">2</span>
+            <div><span class="file">optimizePayload.ts</span> <span class="fn">optimizeForAi</span></div>
+          </li>
+          <li data-detail="slimSelectionForRegister: removes cropImageBase64 from JSON, sets meta.hasImage and selectionEvidence.hasVisual.">
+            <span class="num">3</span>
+            <div><span class="file">registerContext.js</span> <span class="fn">slimSelectionForRegister</span></div>
+          </li>
+          <li data-detail="apiFetch POST via background SYNCLE_FETCH with auth headers. IDs stored in chrome.storage.session via pageContext/cache.ts (30min page TTL).">
+            <span class="num">4</span>
+            <div><span class="file">api/registerContext.js</span> + <span class="file">cache.ts</span></div>
+          </li>
+        </ol>
+        <div class="detail-panel" id="detail-register">Click a step for detail.</div>
+      </section>
+
+      <section id="chat">
+        <h2>8. AI chat — automatic explain on selection</h2>
+        <div class="diagram-wrap"><pre class="mermaid">
+sequenceDiagram
+  participant OA as OverlayApp
+  participant CC as chatClient.js
+  participant AF as apiFetch.js
+  participant BG as background.js
+  participant SVC as syncle-services
+  OA->>OA: requestAiReply(popupId, contextIds)
+  OA->>CC: sendChatMessage
+  CC->>AF: POST /chat
+  AF->>BG: SYNCLE_FETCH
+  BG->>SVC: /chat + JWT
+  SVC-->>OA: { reply, provider, model }
+  OA->>OA: updatePopupContent chatStatus ready
+        </pre></div>
+        <table class="map">
+          <thead><tr><th>Step</th><th>Method</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Trigger</td><td class="fn">requestAiReply</td><td>Message: <code>__syncle_explain_selection__</code></td></tr>
+            <tr><td>HTTP</td><td class="fn">sendChatMessage</td><td>Sends schemaVersion, extractorVersion 2.0.0, context IDs</td></tr>
+            <tr><td>UI</td><td class="fn">updatePopupContent</td><td>loading → ready | error; shows chatReply in PopupBubble</td></tr>
+            <tr><td>Backend</td><td class="fn">buildAnswerPrompt</td><td>Loads stored selection; crop attached for OpenAI vision</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="toolbar">
+        <h2>9. Floating toolbar — radial menu</h2>
+        <p class="lead">Portaled to <code>#syncle-toolbar-mount</code> (light DOM). Center button drag + tap to expand arc actions.</p>
+        <table class="map">
+          <thead><tr><th>Action</th><th>Handler</th></tr></thead>
+          <tbody>
+            <tr><td>Drag center</td><td class="fn">onDragPointerDown/Move/Up</td><td>Position saved to chrome.storage.local syncle_toolbar_pos</td></tr>
+            <tr><td>Tap center</td><td class="fn">toggle isOpen</td><td>Expands arc buttons with CSS --x/--y offsets</td></tr>
+            <tr><td>Mode buttons</td><td class="fn">onProductModeChange</td><td>ai | clips | notes — only AI enables lasso</td></tr>
+            <tr><td>Undo / Clear</td><td class="fn">onUndo / onClear</td><td>OverlayApp undo() / clearAll()</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="bubbles">
+        <h2>10. Popup bubbles — UI on selection</h2>
+        <table class="map">
+          <thead><tr><th>Method</th><th>File</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td class="fn">placePopupOffset</td><td>OverlayApp.jsx</td><td>Positions bubble beside lasso bbox</td></tr>
+            <tr><td class="fn">removeSelection</td><td>OverlayApp.jsx</td><td>Red dismiss — removes poly + popup</td></tr>
+            <tr><td class="fn">minimizePopup / expandPopup</td><td>OverlayApp.jsx</td><td>Compact dot on scroll; click to expand</td></tr>
+            <tr><td class="fn">attachScrollBubbleController</td><td>utils/scrollBubble.js</td><td>Auto-collapse after scroll threshold</td></tr>
+            <tr><td class="fn">PopupBubble</td><td>components/PopupBubble.jsx</td><td>Portal to overlay mount; pointer-events auto</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="api">
+        <h2>11. API layer — reaching syncle-services</h2>
+        <div class="tree">apiFetch(path)
+├── fetchViaBackground → chrome.runtime.sendMessage({ type: "SYNCLE_FETCH" })
+│   └── background.js → fetch(url) with Authorization header
+└── fetchDirect (fallback) → page fetch if background fails
+
+Used by:
+  registerContext.js → /context/page/register | /context/selection/register
+  chatClient.js      → /chat, /ai/status</div>
+        <p class="lead">Base URL from <span class="file">config/api.js</span> (Vite env). Auth from <span class="file">auth/session.js</span> JWT in chrome.storage.local.</p>
+      </section>
+
+      <section id="auth">
+        <h2>12. Auth &amp; extension popup</h2>
+        <p class="lead">Separate Vite entry: <span class="file">popup.html</span> → <span class="fn">PopupApp</span>. Settings sync to content script via <code>chrome.storage.sync</code>.</p>
+        <table class="map">
+          <thead><tr><th>Setting</th><th>Storage key</th><th>Read by OverlayApp</th></tr></thead>
+          <tbody>
+            <tr><td>Drawing on/off</td><td>enabled</td><td>drawingEnabledRef</td></tr>
+            <tr><td>Lasso colors</td><td>lassoTheme</td><td>lassoThemeRef</td></tr>
+            <tr><td>Auto-collapse bubbles</td><td>autoCollapse</td><td>autoCollapseRef</td></tr>
+            <tr><td>Session</td><td>syncle_session (local)</td><td>isSignedIn → register + chat auth</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="build">
+        <h2>13. Build output</h2>
+        <div class="tree">npm run build
+├── vite build              → dist/popup.html + popup assets
+├── vite content config     → dist/content-script.js (OverlayApp bundle)
+└── copy:ext                → manifest, background.js, offscreen.*, icons
+
+Load unpacked: point Chrome to syncle-ui/dist/</div>
+      </section>
+
+      <section id="files">
+        <h2>File map — src/</h2>
+        <table class="map">
+          <thead><tr><th>Path</th><th>Responsibility</th></tr></thead>
+          <tbody>
+            <tr><td class="file">content-script.jsx</td><td>Inject shadow root + mounts</td></tr>
+            <tr><td class="file">OverlayApp.jsx</td><td>Lasso, popups, hotkey, orchestration</td></tr>
+            <tr><td class="file">components/FloatingToolbar.jsx</td><td>Radial floating controls</td></tr>
+            <tr><td class="file">components/PopupBubble.jsx</td><td>Selection popup UI</td></tr>
+            <tr><td class="file">extraction/runExtraction.js</td><td>Capture + register bridge</td></tr>
+            <tr><td class="file">extraction/buildExtractedContext.ts</td><td>Rect + meta + screenshot</td></tr>
+            <tr><td class="file">extraction/optimizePayload.ts</td><td>Register payload builder</td></tr>
+            <tr><td class="file">extraction/pageContext/*</td><td>URL fingerprint + session cache</td></tr>
+            <tr><td class="file">api/registerContext.js</td><td>POST context to backend</td></tr>
+            <tr><td class="file">api/chatClient.js</td><td>POST /chat</td></tr>
+            <tr><td class="file">api/apiFetch.js</td><td>Background-proxied fetch</td></tr>
+            <tr><td class="file">public/background.js</td><td>SYNCLE_FETCH, EXTRACTION_CAPTURE_CROP</td></tr>
+            <tr><td class="file">public/offscreen.js</td><td>Image crop + JPEG encode</td></tr>
+            <tr><td class="file">utils/anchorCoords.js</td><td>Scroll-anchored coordinates</td></tr>
+            <tr><td class="file">popup/PopupApp.jsx</td><td>Settings + Google sign-in</td></tr>
+            <tr><td class="file">docs/extension-flow.html</td><td>This interactive architecture guide (open in browser)</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="doc">
+        <h2>extension-flow.html — this document</h2>
+        <p class="lead">
+          Standalone HTML explorer for Chrome Extension basics and Syncle implementation flows. No build step — open the file directly after clone.
+        </p>
+        <div class="tree">syncle-ui/docs/extension-flow.html
+├── Left nav — jump to any section (Chrome 101 → file map)
+├── Mermaid diagrams — architecture, sequences, state machines
+├── Clickable step lists — install, bootstrap, full-page draw, anchoring, lasso, …
+└── Overview chips — quick links to bootstrap, whole-page draw, scroll anchor, API</div>
+        <h3>Open locally</h3>
+        <pre class="tree" style="margin-top:0.5rem">cd syncle-ui
+open docs/extension-flow.html
+# or: file:///…/syncle-ui/docs/extension-flow.html</pre>
+        <p class="lead">Requires network once for Mermaid CDN (<code>cdn.jsdelivr.net</code>). All Syncle copy is embedded in the HTML.</p>
+        <h3>Sections most relevant to drawing</h3>
+        <table class="map">
+          <thead><tr><th>Section</th><th>Topic</th></tr></thead>
+          <tbody>
+            <tr><td><a href="#fullpage">§2 Draw on whole page</a></td><td>Fixed overlay, viewport canvases, pointer-events, window listeners</td></tr>
+            <tr><td><a href="#anchor">§3 Stick while scrolling</a></td><td>pickAnchor, offsets, syncFrame, bubble tracking</td></tr>
+            <tr><td><a href="#lasso">§4 Lasso draw</a></td><td>Hotkey state machine, commit, live vs ink canvas</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "dark",
+      securityLevel: "loose",
+      flowchart: { curve: "basis" },
+    });
+
+    const navLinks = [...document.querySelectorAll("#nav a")];
+    const sections = [...document.querySelectorAll("main section[id]")];
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          const id = e.target.id;
+          navLinks.forEach((a) => {
+            a.classList.toggle("active", a.getAttribute("href") === `#${id}`);
+          });
+        }
+      },
+      { rootMargin: "-20% 0px -60% 0px", threshold: 0 }
+    );
+    sections.forEach((s) => observer.observe(s));
+
+    const overviewPills = document.querySelectorAll("#overview-pills .pill");
+    const overviewPanel = document.getElementById("detail-overview-pills");
+    overviewPills.forEach((pill) => {
+      pill.addEventListener("click", () => {
+        overviewPills.forEach((p) => p.classList.remove("active"));
+        pill.classList.add("active");
+        if (overviewPanel && pill.dataset.detail) {
+          overviewPanel.innerHTML = pill.dataset.detail;
+        }
+      });
+    });
+
+    document.querySelectorAll("ol.steps").forEach((list) => {
+      const flowId = list.dataset.flow;
+      const panel = document.getElementById(`detail-${flowId}`);
+      const items = [...list.querySelectorAll("li")];
+
+      items.forEach((li, i) => {
+        li.addEventListener("click", () => {
+          items.forEach((x) => x.classList.remove("active"));
+          li.classList.add("active");
+          if (panel) panel.innerHTML = `<strong>Step ${i + 1}</strong><br>${li.dataset.detail || ""}`;
+        });
+      });
+
+      const playBtn = document.querySelector(`[data-play="${flowId}"]`);
+      const resetBtn = document.querySelector(`[data-reset="${flowId}"]`);
+
+      if (playBtn) {
+        playBtn.addEventListener("click", async () => {
+          for (let i = 0; i < items.length; i++) {
+            items.forEach((x) => x.classList.remove("active"));
+            items[i].classList.add("active");
+            if (panel) panel.innerHTML = `<strong>Step ${i + 1}</strong><br>${items[i].dataset.detail || ""}`;
+            items[i].scrollIntoView({ block: "nearest", behavior: "smooth" });
+            await new Promise((r) => setTimeout(r, 1400));
+          }
+        });
+      }
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+          items.forEach((x) => x.classList.remove("active"));
+          if (panel) panel.textContent = "Click a step or press Play.";
+        });
+      }
+    });
+  </script>
+</body>
+</html>

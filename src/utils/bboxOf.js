@@ -1,5 +1,8 @@
-const bboxOf = (pts) => {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+export function bboxOf(pts) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
   for (const p of pts) {
     if (p.x < minX) minX = p.x;
     if (p.y < minY) minY = p.y;
@@ -7,6 +10,13 @@ const bboxOf = (pts) => {
     if (p.y > maxY) maxY = p.y;
   }
   return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
-};
+}
 
-export default bboxOf
+/** Visual center of a lasso (bounding-box midpoint). */
+export function centroidOf(pts) {
+  const box = bboxOf(pts);
+  return {
+    x: box.minX + box.w / 2,
+    y: box.minY + box.h / 2,
+  };
+}

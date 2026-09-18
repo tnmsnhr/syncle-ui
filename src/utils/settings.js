@@ -4,7 +4,6 @@ export const DEFAULT_SETTINGS = {
   theme: "system",
   enabled: true,
   lassoTheme: DEFAULT_LASSO_THEME_ID,
-  autoCollapse: true,
 };
 
 export function loadSettings() {
@@ -28,11 +27,6 @@ export function isDrawingEnabled(settings) {
   return settings?.enabled !== false;
 }
 
-/** Only an explicit `false` disables scroll auto-collapse. */
-export function isAutoCollapseEnabled(settings) {
-  return settings?.autoCollapse !== false;
-}
-
 export function saveSettings(partial) {
   return new Promise((resolve) => {
     chrome.storage.sync.set(partial, () => resolve());
@@ -41,10 +35,12 @@ export function saveSettings(partial) {
 
 export function applyThemeToDocument(theme) {
   const root = document.documentElement;
-  root.dataset.theme =
-    theme === "system"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"
-      : theme;
+  root.dataset.theme = resolvePanelTheme(theme);
+}
+
+export function resolvePanelTheme(theme) {
+  if (theme === "light" || theme === "dark") return theme;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 }

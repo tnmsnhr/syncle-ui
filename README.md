@@ -1,6 +1,8 @@
 # Syncle Chrome Extension
 
-Syncle lets you lasso areas on any webpage and attach chat-style bubbles that stay pinned while you scroll.
+Syncle lets you lasso areas on any webpage and open chat-style bubbles beside your selection.
+
+**How it works (short):** A full-viewport overlay sits on top of each tab (`pointer-events: none` until you hold ⌘/Ctrl). You draw anywhere on the visible page; a chat bubble opens beside the selection. Configure lasso colors and panel theme in the extension popup. See [Architecture explorer](#architecture-explorer) (`docs/extension-flow.html`) for diagrams and step-by-step flows.
 
 ## Features
 
@@ -31,6 +33,21 @@ Syncle lets you lasso areas on any webpage and attach chat-style bubbles that st
    - **Extension Popup**: Change colors, clear areas, enable/disable
    - **Color Picker**: Choose from 8 different colors
    - **Clear All**: Remove all drawn areas
+
+## Architecture explorer
+
+Interactive documentation in **`docs/extension-flow.html`** — Chrome Extension 101 (background vs content script, manifest, every file) plus Syncle flows:
+
+| Section | What it covers |
+|--------|----------------|
+| **§2 Draw on whole page** | Fixed overlay, viewport-sized canvases, ⌘/Ctrl + window pointer listeners |
+| **§4+** | Lasso commit → screenshot crop → register → AI chat |
+
+```bash
+cd syncle-ui && open docs/extension-flow.html
+```
+
+Or open `syncle-ui/docs/extension-flow.html` in any browser (Mermaid loads from CDN).
 
 ## Development
 

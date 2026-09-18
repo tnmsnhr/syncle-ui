@@ -1,0 +1,95 @@
+.syncle-selection-toolbar {
+  --bubble-bg: rgba(255, 255, 255, 0.72);
+  --bubble-border: rgba(60, 60, 67, 0.22);
+  --bubble-text: rgba(28, 28, 30, 0.92);
+  --bubble-shadow: 0 10px 28px rgba(0, 0, 0, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  position: fixed;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--bubble-border);
+  border-radius: 999px;
+  background: var(--bubble-bg);
+  color: var(--bubble-text);
+  box-shadow: var(--bubble-shadow);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  pointer-events: auto;
+  user-select: none;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  .syncle-selection-toolbar:not([data-theme="light"]) {
+    --bubble-bg: rgba(28, 28, 30, 0.78);
+    --bubble-border: rgba(255, 255, 255, 0.16);
+    --bubble-text: rgba(245, 245, 247, 0.92);
+    --bubble-shadow: 0 12px 32px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+}
+
+.syncle-selection-toolbar[data-theme="light"] {
+  --bubble-bg: rgba(255, 255, 255, 0.72);
+  --bubble-border: rgba(60, 60, 67, 0.22);
+  --bubble-text: rgba(28, 28, 30, 0.92);
+}
+
+.syncle-selection-toolbar[data-theme="dark"] {
+  --bubble-bg: rgba(28, 28, 30, 0.78);
+  --bubble-border: rgba(255, 255, 255, 0.16);
+  --bubble-text: rgba(245, 245, 247, 0.92);
+}
+
+.syncle-selection-toolbar__btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  white-space: nowrap;
+}
+
+.syncle-selection-toolbar__btn:hover {
+  background: color-mix(in srgb, var(--bubble-text) 10%, transparent);
+}
+
+.syncle-selection-toolbar__btn.is-primary {
+  background: color-mix(in srgb, #4286f5 18%, transparent);
+  color: #2563eb;
+}
+
+.syncle-selection-toolbar[data-theme="dark"] .syncle-selection-toolbar__btn.is-primary {
+  color: #93c5fd;
+}
+
+.syncle-selection-toolbar__btn.is-primary:hover {
+  background: color-mix(in srgb, #4286f5 28%, transparent);
+}
+
+.syncle-selection-toolbar__logo {
+  width: 14px;
+  height: 14px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.syncle-selection-toolbar[data-theme="light"] .syncle-selection-toolbar__logo {
+  filter: brightness(0) saturate(100%) invert(32%) sepia(98%) saturate(1800%)
+    hue-rotate(206deg) brightness(95%) contrast(92%);
+}
+
+.syncle-selection-toolbar[data-theme="dark"] .syncle-selection-toolbar__logo,
+.syncle-selection-toolbar:not([data-theme="light"]) .syncle-selection-toolbar__logo {
+  filter: brightness(0) saturate(100%) invert(78%) sepia(18%) saturate(1200%)
+    hue-rotate(185deg) brightness(105%) contrast(95%);
+}

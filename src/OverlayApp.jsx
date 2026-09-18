@@ -1,104 +1,80 @@
-// OverlayLasso.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import PopupBubble from "./components/PopupBubble.jsx";
+import uid from "./utils/uid.js";
+import { getViewportSize } from "./utils/viewport.js";
+import { bboxOf, centroidOf } from "./utils/bboxOf.js";
+import { placePopupPosition } from "./utils/placePopupPosition.js";
 import {
-  uid,
-  bboxOf,
-  pickAnchor,
-  getViewportSize,
-  clientPointsFromAnchor,
-  clientPointFromAnchor,
-  offsetsFromClientPoints,
-  getSelectionCentroid,
-  attachScrollBubbleController,
-  BUBBLE_MORPH_MS,
-  loadSettings,
-  isDrawingEnabled,
-  isAutoCollapseEnabled,
+  clientToPage,
+  onPageScroll,
+  pageToClient,
+} from "./utils/pageCoords.js";
+import { loadSettings, isDrawingEnabled, resolvePanelTheme } from "./utils/settings.js";
+import {
   getLassoTheme,
   DEFAULT_LASSO_THEME_ID,
-} from "./utils";
-import { runSelectionExtraction } from "./extraction/runExtraction.js";
-import { ensureContextRegistered } from "./api/registerContext.js";
-import { sendChatMessage } from "./api/chatClient.js";
-import { isSignedIn } from "./auth/session.js";
-import { CLOUD_SYNC_ENABLED } from "./config/features.js";
+} from "./utils/lassoThemes.js";
 import FloatingToolbar from "./components/FloatingToolbar.jsx";
+import SelectionToolbar from "./components/SelectionToolbar.jsx";
+import { isAiProductMode } from "./components/productModes.js";
 import {
-  PRODUCT_MODES,
-  isAiProductMode,
-} from "./components/productModes.js";
+  subscribeMediaFullscreen,
+  setOverlayHostsHidden,
+} from "./utils/mediaFullscreen.js";
+import {
+  readPageSelection,
+  placeSelectionToolbar,
+  applyTextHighlight,
+  removeTextHighlight,
+  clearAllTextHighlights,
+  clearNativeSelection,
+  highlightFill,
+} from "./utils/textSelection.js";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
-const AUTO_CHAT_MESSAGE = "__syncle_explain_selection__";
 const AI_DRAW_CURSOR =
   'url("data:image/svg+xml,%3Csvg xmlns%3D%27http%3A//www.w3.org/2000/svg%27 width%3D%2724%27 height%3D%2724%27 viewBox%3D%270 0 24 24%27%3E%3Ccircle cx%3D%279%27 cy%3D%279%27 r%3D%273%27 fill%3D%27none%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27/%3E%3Cpath d%3D%27M9 2v3M9 13v3M2 9h3M13 9h3%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27 stroke-linecap%3D%27round%27/%3E%3Cpath d%3D%27M17 4l.8 1.8L20 6.6l-2.2.8L17 9.2l-.8-1.8L14 6.6l2.2-.8z%27 fill%3D%27%23f59e0b%27/%3E%3Cpath d%3D%27M18 12l1 2.2 2.4.9-2.4.9-1 2.2-1-2.2-2.4-.9 2.4-.9z%27 fill%3D%27%23fde68a%27/%3E%3C/svg%3E") 9 9, crosshair';
 const INTERACTIVE_OVERLAY_SELECTOR =
-  ".popup-bubble, .syncle-floating-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount";
+  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount";
+
+const POPUP_Z_BASE = 2147483640;
 
 export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   const [hotkeyReady, setHotkeyReady] = useState(false);
   const [drawingEnabled, setDrawingEnabled] = useState(true);
   const [viewport, setViewport] = useState(getViewportSize());
-  const [, setFrame] = useState(0);
 
   const drawingEnabledRef = useRef(true);
-  const autoCollapseRef = useRef(true);
   const isDrawingRef = useRef(false);
-  const lassoThemeRef = useRef(getLassoTheme(DEFAULT_LASSO_THEME_ID));
+  const mediaFullscreenRef = useRef(false);
+  const [lassoTheme, setLassoTheme] = useState(
+    getLassoTheme(DEFAULT_LASSO_THEME_ID)
+  );
+  const [panelTheme, setPanelTheme] = useState(resolvePanelTheme("system"));
+  const themePrefRef = useRef("system");
+  const lassoThemeRef = useRef(lassoTheme);
+  lassoThemeRef.current = lassoTheme;
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
 
-  const [productMode, setProductMode] = useState(PRODUCT_MODES.AI);
-  const productModeRef = useRef(PRODUCT_MODES.AI);
+  const [productMode, setProductMode] = useState("ai");
+  const productModeRef = useRef("ai");
   productModeRef.current = productMode;
 
-  const [signedIn, setSignedIn] = useState(false);
   const [popups, setPopups] = useState([]);
-  const [popupsCompact, setPopupsCompact] = useState(false);
-  const [bubbleMorph, setBubbleMorph] = useState(null);
-  const [morphPopupId, setMorphPopupId] = useState(null);
-  const [expandedPopupIds, setExpandedPopupIds] = useState(() => new Set());
-  const popupsCompactRef = useRef(false);
-  const expandedPopupIdsRef = useRef(new Set());
-  const bubbleMorphRef = useRef(null);
-  const morphTimerRef = useRef(null);
-  const resetScrollAccumulatedRef = useRef(() => {});
-  popupsCompactRef.current = popupsCompact;
-  expandedPopupIdsRef.current = expandedPopupIds;
-  bubbleMorphRef.current = bubbleMorph;
-
-  const addExpandedPopup = (id) => {
-    setExpandedPopupIds((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  };
-
-  const clearExpandedPopups = () => setExpandedPopupIds(new Set());
-
-  const popupsCountRef = useRef(0);
-  popupsCountRef.current = popups.length;
+  const [selectionUi, setSelectionUi] = useState(null);
+  const pendingSelRef = useRef(null);
+  const textHighlightsRef = useRef(new Map());
 
   const liveCanvasRef = useRef(null);
   const inkCanvasRef = useRef(null);
   const pointsRef = useRef([]);
   const polysRef = useRef([]);
-  const anchorsRef = useRef(new Map());
 
   const liveCtx = () => liveCanvasRef.current?.getContext("2d");
   const inkCtx = () => inkCanvasRef.current?.getContext("2d");
-
-  const getAnchor = (id) => {
-    const a = anchorsRef.current.get(id);
-    return a?.isConnected ? a : null;
-  };
-
-  const bump = () => setFrame((n) => n + 1);
 
   const redrawInk = () => {
     const ctx = inkCtx();
@@ -111,22 +87,48 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     ctx.fillStyle = colors.fill;
 
     for (const poly of polysRef.current) {
-      const anchor = getAnchor(poly.id) || poly.anchor;
-      const clientPts = clientPointsFromAnchor(
-        anchor,
-        poly.offsets,
-        poly.pts
-      );
-      if (!clientPts || clientPts.length < 2) continue;
+      const pagePts = poly.pagePts;
+      if (!pagePts || pagePts.length < 2) continue;
 
+      const first = pageToClient(pagePts[0].x, pagePts[0].y);
       ctx.beginPath();
-      ctx.moveTo(clientPts[0].x, clientPts[0].y);
-      for (let i = 1; i < clientPts.length; i++) {
-        ctx.lineTo(clientPts[i].x, clientPts[i].y);
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < pagePts.length; i++) {
+        const pt = pageToClient(pagePts[i].x, pagePts[i].y);
+        ctx.lineTo(pt.x, pt.y);
       }
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+    }
+
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    for (const { range, border } of textHighlightsRef.current.values()) {
+      let rects;
+      try {
+        if (!range || range.collapsed) continue;
+        rects = range.getClientRects();
+      } catch {
+        continue;
+      }
+      ctx.strokeStyle = border;
+      for (const r of rects) {
+        if (r.width < 1 || r.height < 1) continue;
+        const x = r.left - 1.5;
+        const y = r.top - 1.5;
+        const w = r.width + 3;
+        const h = r.height + 3;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(x, y, w, h, 3);
+        } else {
+          ctx.rect(x, y, w, h);
+        }
+        ctx.stroke();
+      }
     }
   };
 
@@ -138,13 +140,15 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     const pts = pointsRef.current;
     if (pts.length < 1) return;
 
+    const first = pageToClient(pts[0].x, pts[0].y);
     ctx.beginPath();
-    ctx.moveTo(pts[0].clientX, pts[0].clientY);
+    ctx.moveTo(first.x, first.y);
     for (let i = 1; i < pts.length; i++) {
-      ctx.lineTo(pts[i].clientX, pts[i].clientY);
+      const pt = pageToClient(pts[i].x, pts[i].y);
+      ctx.lineTo(pt.x, pt.y);
     }
     if (pts.length > 1) {
-      ctx.lineTo(pts[0].clientX, pts[0].clientY);
+      ctx.lineTo(first.x, first.y);
     }
 
     ctx.strokeStyle = lassoThemeRef.current.border;
@@ -175,70 +179,6 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     redrawInk();
   };
 
-  const syncFrame = () => {
-    redrawInk();
-    // Keep popups/chips aligned with anchors on scroll (no transition while compact).
-    if (popupsCountRef.current > 0) {
-      bump();
-    }
-  };
-
-  const startMorph = (phase, afterFrame) => {
-    if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
-    setBubbleMorph(phase);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(afterFrame);
-    });
-    morphTimerRef.current = setTimeout(() => {
-      setBubbleMorph(null);
-      morphTimerRef.current = null;
-      bump();
-    }, BUBBLE_MORPH_MS);
-  };
-
-  const collapseBubbles = () => {
-    const fullyCompact =
-      popupsCompactRef.current && expandedPopupIdsRef.current.size === 0;
-    if (fullyCompact) return;
-
-    startMorph("collapse", () => {
-      setPopupsCompact(true);
-      clearExpandedPopups();
-    });
-  };
-
-  const POPUP_Z_BASE = 2147483640;
-
-  const bringPopupToFront = (id) => {
-    setPopups((prev) => {
-      const idx = prev.findIndex((p) => p.id === id);
-      if (idx < 0 || idx === prev.length - 1) return prev;
-      const next = [...prev];
-      const [item] = next.splice(idx, 1);
-      next.push(item);
-      return next;
-    });
-  };
-
-  /** Expand one selection; other open bubbles stay open until scroll collapses all. */
-  const expandPopup = (id) => {
-    if (expandedPopupIds.has(id)) return;
-    bringPopupToFront(id);
-    resetScrollAccumulatedRef.current();
-    if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
-    setMorphPopupId(id);
-    setBubbleMorph("expand");
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => addExpandedPopup(id));
-    });
-    morphTimerRef.current = setTimeout(() => {
-      setBubbleMorph(null);
-      setMorphPopupId(null);
-      morphTimerRef.current = null;
-      bump();
-    }, BUBBLE_MORPH_MS);
-  };
-
   const cancelLive = () => {
     isDrawingRef.current = false;
     pointsRef.current = [];
@@ -251,92 +191,52 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     const ro = new ResizeObserver(resizeCanvases);
     ro.observe(document.documentElement);
 
-    let raf = 0;
-    const schedule = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        syncFrame();
-      });
-    };
-
     const onWinResize = () => {
       if (onWinResize._r) cancelAnimationFrame(onWinResize._r);
       onWinResize._r = requestAnimationFrame(resizeCanvases);
     };
 
-    document.addEventListener("scroll", schedule, { capture: true, passive: true });
     window.addEventListener("resize", onWinResize, { passive: true });
     const vv = window.visualViewport;
-    vv?.addEventListener("scroll", schedule, { passive: true });
-    vv?.addEventListener("resize", schedule, { passive: true });
+    vv?.addEventListener("resize", onWinResize, { passive: true });
 
-    let active = true;
-    const loop = () => {
-      if (!active) return;
-      if (
-        polysRef.current.length > 0 ||
-        pointsRef.current.length > 0 ||
-        popupsCountRef.current > 0
-      ) {
-        schedule();
-      }
-      requestAnimationFrame(loop);
-    };
-    requestAnimationFrame(loop);
+    const stopScroll = onPageScroll(() => {
+      redrawInk();
+      if (isDrawingRef.current) drawLive();
+    });
 
     return () => {
-      active = false;
       ro.disconnect();
-      document.removeEventListener("scroll", schedule, true);
+      stopScroll();
       window.removeEventListener("resize", onWinResize);
-      vv?.removeEventListener("scroll", schedule);
-      vv?.removeEventListener("resize", schedule);
+      vv?.removeEventListener("resize", onWinResize);
       if (onWinResize._r) cancelAnimationFrame(onWinResize._r);
-      if (raf) cancelAnimationFrame(raf);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (popups.length === 0) {
-      setPopupsCompact(false);
-      setBubbleMorph(null);
-      setMorphPopupId(null);
-      clearExpandedPopups();
-      if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
-      return;
-    }
-
-    const cleanup = attachScrollBubbleController({
-      onCollapse: collapseBubbles,
-      isFullyCompact: () =>
-        popupsCompactRef.current && expandedPopupIdsRef.current.size === 0,
-      isEnabled: () => autoCollapseRef.current,
+    return subscribeMediaFullscreen((hidden) => {
+      mediaFullscreenRef.current = hidden;
+      setOverlayHostsHidden(hidden);
+      if (hidden) cancelLive();
     });
-    resetScrollAccumulatedRef.current = cleanup.resetAccumulated;
-    return () => {
-      cleanup.removeListener();
-      resetScrollAccumulatedRef.current = () => {};
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [popups.length]);
+  }, []);
 
   useEffect(() => {
     loadSettings().then((s) => {
       const on = isDrawingEnabled(s);
       drawingEnabledRef.current = on;
       setDrawingEnabled(on);
-      autoCollapseRef.current = isAutoCollapseEnabled(s);
-      lassoThemeRef.current = getLassoTheme(s.lassoTheme);
+      themePrefRef.current = s.theme || "system";
+      setPanelTheme(resolvePanelTheme(themePrefRef.current));
+      const theme = getLassoTheme(s.lassoTheme);
+      lassoThemeRef.current = theme;
+      setLassoTheme(theme);
       redrawInk();
     });
-    isSignedIn().then(setSignedIn);
 
     const onStorageChange = (changes, area) => {
-      if (area === "local" && changes.syncle_session) {
-        isSignedIn().then(setSignedIn);
-      }
       if (area !== "sync") return;
 
       if (changes.enabled !== undefined) {
@@ -349,19 +249,74 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         }
       }
 
+      if (changes.theme !== undefined) {
+        themePrefRef.current = changes.theme.newValue || "system";
+        setPanelTheme(resolvePanelTheme(themePrefRef.current));
+      }
+
       if (changes.lassoTheme !== undefined) {
-        lassoThemeRef.current = getLassoTheme(changes.lassoTheme.newValue);
+        const theme = getLassoTheme(changes.lassoTheme.newValue);
+        lassoThemeRef.current = theme;
+        setLassoTheme(theme);
         redrawInk();
         if (isDrawingRef.current) drawLive();
       }
-
-      if (changes.autoCollapse !== undefined) {
-        autoCollapseRef.current = changes.autoCollapse.newValue !== false;
-      }
     };
     chrome.storage.onChanged.addListener(onStorageChange);
-    return () => chrome.storage.onChanged.removeListener(onStorageChange);
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onScheme = () => {
+      if (themePrefRef.current === "system") {
+        setPanelTheme(resolvePanelTheme("system"));
+      }
+    };
+    mq.addEventListener("change", onScheme);
+    return () => {
+      chrome.storage.onChanged.removeListener(onStorageChange);
+      mq.removeEventListener("change", onScheme);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const showFromSelection = (e) => {
+      if (mediaFullscreenRef.current) return;
+      if (!drawingEnabledRef.current) return;
+      if (isDrawingRef.current) return;
+      if (
+        e.target instanceof Element &&
+        e.target.closest(".syncle-selection-toolbar, .popup-bubble")
+      ) {
+        return;
+      }
+
+      const next = readPageSelection();
+      if (!next) {
+        pendingSelRef.current = null;
+        setSelectionUi(null);
+        return;
+      }
+
+      pendingSelRef.current = next;
+      const placed = placeSelectionToolbar(next.box, viewportRef.current);
+      const page = clientToPage(placed.x, placed.y);
+      setSelectionUi({ pageX: page.x, pageY: page.y });
+    };
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        pendingSelRef.current = null;
+        setSelectionUi(null);
+      }
+    };
+
+    document.addEventListener("mouseup", showFromSelection, true);
+    document.addEventListener("keyup", showFromSelection, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mouseup", showFromSelection, true);
+      document.removeEventListener("keyup", showFromSelection, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -418,46 +373,6 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     };
   }, [drawingEnabled, hotkeyReady, productMode]);
 
-  const updatePopupContent = (popupId, patch) => {
-    setPopups((prev) =>
-      prev.map((p) =>
-        p.id === popupId ? { ...p, content: { ...p.content, ...patch } } : p
-      )
-    );
-  };
-
-  const requestAiReply = async (popupId, contextIds) => {
-    if (!contextIds?.pageContextId || !contextIds?.selectionContextId) return;
-
-    updatePopupContent(popupId, {
-      chatStatus: "loading",
-      chatError: "",
-      chatProvider: "",
-      chatModel: "",
-    });
-
-    try {
-      const result = await sendChatMessage({
-        pageContextId: contextIds.pageContextId,
-        selectionContextId: contextIds.selectionContextId,
-        message: AUTO_CHAT_MESSAGE,
-      });
-
-      updatePopupContent(popupId, {
-        chatStatus: "ready",
-        chatReply: result.reply || "",
-        chatProvider: result.provider || "",
-        chatModel: result.model || "",
-        chatError: "",
-      });
-    } catch (err) {
-      updatePopupContent(popupId, {
-        chatStatus: "error",
-        chatError: err instanceof Error ? err.message : String(err),
-      });
-    }
-  };
-
   useEffect(() => {
     const finishCommit = () => {
       const points = pointsRef.current;
@@ -466,192 +381,27 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
       if (points.length >= 3) {
         const id = uid();
-        const n = points.length;
-        let cx = 0,
-          cy = 0;
-        for (const p of points) {
-          cx += p.clientX;
-          cy += p.clientY;
-        }
-        cx /= n;
-        cy /= n;
+        const pagePts = points.map((p) => ({ x: p.x, y: p.y }));
+        const clientPts = pagePts.map((p) => pageToClient(p.x, p.y));
 
-        const anchor = pickAnchor(cx, cy);
-        const clientPts = points.map((p) => ({
-          x: p.clientX,
-          y: p.clientY,
-        }));
-        const offsets = offsetsFromClientPoints(anchor, clientPts);
-        const pagePts = points.map((p) => ({ x: p.pageX, y: p.pageY }));
-
-        anchorsRef.current.set(id, anchor);
-        polysRef.current.push({ id, pts: pagePts, offsets, anchor });
-
+        polysRef.current.push({ id, pagePts });
         redrawInk();
 
         const view = viewportRef.current;
-        const box = bboxOf(clientPts);
-        const popupOffset = placePopupOffset(box, anchor, view);
+        const placed = placePopupPosition(bboxOf(clientPts), view);
+        const pagePos = clientToPage(placed.x, placed.y);
+        const centroid = centroidOf(pagePts);
         setPopups((prev) => [
           ...prev,
           {
             id,
-            popupOffset,
-            content: {
-              bbox: bboxOf(pagePts),
-              text: "",
-              extractStatus: "loading",
-              chatDraft: "",
-              chatReply: "",
-              chatStatus: "idle",
-              chatError: "",
-              chatProvider: "",
-              chatModel: "",
-              registerStatus: CLOUD_SYNC_ENABLED ? "extracting" : "local",
-            },
+            mode: "ask",
+            pageX: pagePos.x,
+            pageY: pagePos.y,
+            centroidPageX: centroid.x,
+            centroidPageY: centroid.y,
           },
         ]);
-        // New selections open expanded even when older bubbles are collapsed.
-        if (popupsCompactRef.current) {
-          addExpandedPopup(id);
-        }
-
-        const registerWatchdog = setTimeout(() => {
-          setPopups((prev) =>
-            prev.map((p) =>
-              p.id === id &&
-              (p.content.registerStatus === "pending" ||
-                p.content.registerStatus === "extracting")
-                ? {
-                    ...p,
-                    content: {
-                      ...p.content,
-                      registerStatus: "error",
-                      registerError:
-                        "Register timed out. Reload the extension and ensure syncle-services is on :3001.",
-                    },
-                  }
-                : p
-            )
-          );
-        }, 40000);
-
-        const runExtract = () =>
-          runSelectionExtraction(clientPts, id, (registerResult) => {
-            clearTimeout(registerWatchdog);
-            if (registerResult.ok) {
-              setPopups((prev) =>
-                prev.map((p) =>
-                  p.id === id
-                    ? {
-                        ...p,
-                        content: {
-                          ...p.content,
-                          contextIds: {
-                            pageContextId: registerResult.pageContextId,
-                            selectionContextId: registerResult.selectionContextId,
-                          },
-                          registerStatus: "ready",
-                          registerError: "",
-                        },
-                      }
-                    : p
-                )
-              );
-            } else {
-              setPopups((prev) =>
-                prev.map((p) =>
-                  p.id === id
-                    ? {
-                        ...p,
-                        content: {
-                          ...p.content,
-                          registerStatus:
-                            registerResult.reason === "not_signed_in"
-                              ? "no_session"
-                              : "error",
-                          registerError: registerResult.message || "",
-                        },
-                      }
-                    : p
-                )
-              );
-            }
-          })
-          .then((extracted) => {
-            const preview =
-              extracted.selectionEvidence?.candidates?.[0]?.text?.trim().slice(0, 280) ||
-              extracted.focus.text?.trim().slice(0, 280) ||
-              (extracted.focus.cropImageBase64
-                ? `[Visual: ${extracted.meta.extractionStrategy}]`
-                : "");
-            setPopups((prev) =>
-              prev.map((p) => {
-                if (p.id !== id) return p;
-                const reg = p.content.registerStatus;
-                const registerStatus = !CLOUD_SYNC_ENABLED
-                  ? "local"
-                  : extracted.contextIds
-                    ? "ready"
-                    : reg === "ready" || reg === "error" || reg === "no_session"
-                      ? reg
-                      : reg === "extracting"
-                        ? "pending"
-                        : reg;
-                const contextIds =
-                  extracted.contextIds ?? p.content.contextIds;
-                const canChat = Boolean(
-                  contextIds?.pageContextId && contextIds?.selectionContextId
-                );
-                return {
-                  ...p,
-                  content: {
-                    ...p.content,
-                    text: preview,
-                    extracted,
-                    aiPayload: extracted.aiPayload,
-                    contextIds,
-                    extractStatus: "ready",
-                    registerStatus,
-                    chatStatus: canChat ? "loading" : p.content.chatStatus,
-                  },
-                };
-              })
-            );
-
-            const ids = extracted.contextIds;
-            if (ids?.pageContextId && ids?.selectionContextId) {
-              requestAiReply(id, ids);
-            }
-          })
-          .catch((err) => {
-            clearTimeout(registerWatchdog);
-            console.warn("[syncle] extraction failed:", err);
-            setPopups((prev) =>
-              prev.map((p) =>
-                p.id === id
-                  ? {
-                      ...p,
-                      content: {
-                        ...p.content,
-                        text: "Could not extract selection.",
-                        extractStatus: "error",
-                        registerStatus: "error",
-                        registerError:
-                          err instanceof Error
-                            ? err.message
-                            : String(err),
-                      },
-                    }
-                  : p
-              )
-            );
-          });
-
-        // Defer so the popup bubble is not the topmost hit target for caret/element sampling.
-        requestAnimationFrame(() => {
-          requestAnimationFrame(runExtract);
-        });
       }
 
       const { width, height } = viewportRef.current;
@@ -660,6 +410,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
     const start = (e) => {
       if (!(e instanceof PointerEvent)) return;
+      if (mediaFullscreenRef.current) return;
       if (!drawingEnabledRef.current) return;
       if (!isAiProductMode(productModeRef.current)) return;
       if (
@@ -670,15 +421,10 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       }
       if (!isHotkey(e)) return;
       if (e.button !== 0) return;
+      pendingSelRef.current = null;
+      setSelectionUi(null);
       isDrawingRef.current = true;
-      pointsRef.current = [
-        {
-          clientX: e.clientX,
-          clientY: e.clientY,
-          pageX: e.pageX,
-          pageY: e.pageY,
-        },
-      ];
+      pointsRef.current = [clientToPage(e.clientX, e.clientY)];
       drawLive();
       e.preventDefault();
     };
@@ -687,19 +433,11 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       if (!isDrawingRef.current) return;
       if (!isHotkey(e)) return finishCommit();
       const pts = pointsRef.current;
-      const last = pts[pts.length - 1];
-      if (
-        (e.clientX - last.clientX) ** 2 + (e.clientY - last.clientY) ** 2 <
-        2
-      ) {
+      const last = pageToClient(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      if ((e.clientX - last.x) ** 2 + (e.clientY - last.y) ** 2 < 2) {
         return;
       }
-      pts.push({
-        clientX: e.clientX,
-        clientY: e.clientY,
-        pageX: e.pageX,
-        pageY: e.pageY,
-      });
+      pts.push(clientToPage(e.clientX, e.clientY));
       drawLive();
       e.preventDefault();
     };
@@ -732,207 +470,110 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     };
   }, []);
 
+  const commitTextSelection = (mode) => {
+    const pending = pendingSelRef.current;
+    if (!pending?.range) return;
+    const id = uid();
+    const fill = highlightFill(lassoThemeRef.current);
+    applyTextHighlight(id, pending.range, fill);
+    textHighlightsRef.current.set(id, {
+      range: pending.range,
+      border: lassoThemeRef.current.border,
+    });
+    redrawInk();
+
+    const view = viewportRef.current;
+    const placed = placePopupPosition(pending.box, view);
+    const pagePos = clientToPage(placed.x, placed.y);
+    const centroid = clientToPage(
+      pending.box.minX + pending.box.w / 2,
+      pending.box.minY + pending.box.h / 2,
+    );
+    setPopups((prev) => [
+      ...prev,
+      {
+        id,
+        kind: "text",
+        mode,
+        text: pending.text,
+        pageX: pagePos.x,
+        pageY: pagePos.y,
+        centroidPageX: centroid.x,
+        centroidPageY: centroid.y,
+      },
+    ]);
+
+    pendingSelRef.current = null;
+    setSelectionUi(null);
+    clearNativeSelection();
+  };
+
+  const removeSelection = (id) => {
+    polysRef.current = polysRef.current.filter((poly) => poly.id !== id);
+    textHighlightsRef.current.delete(id);
+    removeTextHighlight(id);
+    setPopups((prev) => prev.filter((p) => p.id !== id));
+    redrawInk();
+  };
+
   const undo = () => {
+    const lastPopup = popups[popups.length - 1];
+    const lastPoly = polysRef.current[polysRef.current.length - 1];
+    if (lastPopup?.kind === "text" || (!lastPoly && lastPopup)) {
+      removeSelection(lastPopup.id);
+      return;
+    }
     const last = polysRef.current.pop();
     if (last) {
-      anchorsRef.current.delete(last.id);
       setPopups((prev) => prev.filter((p) => p.id !== last.id));
-      setExpandedPopupIds((prev) => {
-        if (!prev.has(last.id)) return prev;
-        const next = new Set(prev);
-        next.delete(last.id);
-        return next;
-      });
       redrawInk();
-      bump();
     }
   };
 
   const clearAll = () => {
     polysRef.current.length = 0;
-    anchorsRef.current.clear();
+    textHighlightsRef.current.clear();
+    clearAllTextHighlights();
     setPopups([]);
-    clearExpandedPopups();
+    pendingSelRef.current = null;
+    setSelectionUi(null);
     redrawInk();
-    bump();
-  };
-
-  const removeSelection = (id) => {
-    polysRef.current = polysRef.current.filter((p) => p.id !== id);
-    anchorsRef.current.delete(id);
-    setPopups((prev) => prev.filter((p) => p.id !== id));
-    setExpandedPopupIds((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    if (polysRef.current.length === 0) {
-      setPopupsCompact(false);
-      setBubbleMorph(null);
-      setMorphPopupId(null);
-      clearExpandedPopups();
-    }
-    redrawInk();
-    bump();
-  };
-
-  const minimizePopup = (id) => {
-    if (popupsCompact && !expandedPopupIds.has(id)) return;
-
-    resetScrollAccumulatedRef.current();
-    if (morphTimerRef.current) clearTimeout(morphTimerRef.current);
-    setMorphPopupId(id);
-    setBubbleMorph("collapse");
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setPopupsCompact(true);
-        setExpandedPopupIds((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      });
-    });
-    morphTimerRef.current = setTimeout(() => {
-      setBubbleMorph(null);
-      setMorphPopupId(null);
-      morphTimerRef.current = null;
-      bump();
-    }, BUBBLE_MORPH_MS);
   };
 
   const popupNodes = popups.map((p, stackIndex) => {
-    const poly = polysRef.current.find((poly) => poly.id === p.id);
-    const anchor = getAnchor(p.id);
-    const pos = clientPointFromAnchor(anchor, p.popupOffset);
-    if (!pos || !poly) return null;
-
-    const centroid = getSelectionCentroid(anchor, poly.offsets, poly.pts);
-    const colors = lassoThemeRef.current;
-    const isCompact = popupsCompact && !expandedPopupIds.has(p.id);
-    const showMorph =
-      bubbleMorph === "collapse"
-        ? bubbleMorph
-        : bubbleMorph === "expand" && morphPopupId === p.id
-          ? "expand"
-          : null;
+    if (p.kind !== "text") {
+      const poly = polysRef.current.find((poly) => poly.id === p.id);
+      if (!poly) return null;
+    }
 
     const node = (
       <PopupBubble
-        key={p.id}
-        x={pos.x}
-        y={pos.y}
-        centroidX={centroid?.x}
-        centroidY={centroid?.y}
-        compact={isCompact}
-        morph={showMorph ? bubbleMorph : null}
-        accentColor={colors.border}
-        fillColor={colors.fill}
+        pageX={p.pageX}
+        pageY={p.pageY}
+        centroidPageX={p.centroidPageX}
+        centroidPageY={p.centroidPageY}
+        dotColor={lassoTheme.border}
+        colorScheme={panelTheme}
         zIndex={POPUP_Z_BASE + stackIndex}
-        onMinimize={() => minimizePopup(p.id)}
-        onDismiss={() => removeSelection(p.id)}
-        onBringToFront={() => bringPopupToFront(p.id)}
-        onExpand={() => expandPopup(p.id)}
+        onDelete={() => removeSelection(p.id)}
+        mode={p.mode || "ask"}
       >
-        <div style={{ marginBottom: 6 }}>
-          <div>
-            <b>Lasso ID:</b> {p.id.slice(0, 8)}
-          </div>
-          <div>
-            <b>Vertices:</b> {poly.pts.length}
-          </div>
-          <div>
-            <b>BBox:</b> {Math.round(p.content.bbox.w)}×
-            {Math.round(p.content.bbox.h)} px
-          </div>
-        </div>
-        {p.content.extractStatus === "loading" && (
-          <div style={{ marginTop: 6 }}>
-            <b>Working…</b> <i>Extracting selection and preparing AI reply</i>
-          </div>
-        )}
-        {p.content.extractStatus === "error" && (
-          <div style={{ marginTop: 6 }}>
-            <b>Extract failed:</b>{" "}
-            <i>
-              {p.content.registerError ||
-                p.content.text ||
-                "Could not read selection"}
-            </i>
-          </div>
-        )}
-        {p.content.extractStatus === "ready" && p.content.extracted && (
-          <>
-            <div
-              style={{
-                marginTop: 10,
-                borderTop: "1px solid rgba(0,0,0,0.12)",
-                paddingTop: 8,
-              }}
-            >
-              <b style={{ fontSize: 13 }}>AI response</b>
-              {p.content.chatStatus === "loading" && (
-                <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.75 }}>
-                  <i>Thinking…</i>
-                </p>
-              )}
-              {p.content.chatStatus === "ready" && (
-                <div style={{ marginTop: 8 }}>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      lineHeight: 1.45,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {p.content.chatReply}
-                  </div>
-                  {(p.content.chatProvider || p.content.chatModel) && (
-                    <div style={{ marginTop: 6, fontSize: 10, opacity: 0.6 }}>
-                      {p.content.chatProvider || "ai"}
-                      {p.content.chatModel ? ` · ${p.content.chatModel}` : ""}
-                    </div>
-                  )}
-                </div>
-              )}
-              {p.content.chatStatus === "error" && (
-                <p style={{ margin: "8px 0 0", fontSize: 11, color: "#b91c1c" }}>
-                  {p.content.chatError || "Could not fetch AI response."}
-                </p>
-              )}
-            </div>
-
-            {p.content.chatStatus === "loading" && (
-              <p style={{ margin: "8px 0 0", fontSize: 12, opacity: 0.75 }}>
-                <i>Analyzing…</i>
-              </p>
-            )}
-          </>
-        )}
+        {p.text ? (
+          <p className="popup-bubble__quote">{p.text}</p>
+        ) : null}
       </PopupBubble>
     );
 
-    return toolbarMount ? createPortal(node, toolbarMount) : node;
+    return (
+      <React.Fragment key={p.id}>
+        {toolbarMount ? createPortal(node, toolbarMount) : node}
+      </React.Fragment>
+    );
   });
-
-  const handleProductModeChange = (mode) => {
-    setProductMode(mode);
-    if (!isAiProductMode(mode)) {
-      cancelLive();
-      setHotkeyReady(false);
-    }
-  };
 
   const toolbar = (
     <FloatingToolbar
-      productMode={productMode}
-      onProductModeChange={handleProductModeChange}
-      drawingEnabled={drawingEnabled && isAiProductMode(productMode)}
-      hotkeyReady={hotkeyReady && isAiProductMode(productMode)}
-      onUndo={undo}
+      colorScheme={panelTheme}
       onClear={clearAll}
       viewport={viewport}
     />
@@ -966,23 +607,20 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
           ? createPortal(toolbar, toolbarMount)
           : toolbar}
 
+      {selectionUi
+        ? createPortal(
+            <SelectionToolbar
+              pageX={selectionUi.pageX}
+              pageY={selectionUi.pageY}
+              colorScheme={panelTheme}
+              onComment={() => commitTextSelection("comment")}
+              onAsk={() => commitTextSelection("ask")}
+            />,
+            toolbarControlsMount || toolbarMount || document.documentElement,
+          )
+        : null}
+
       {popupNodes}
     </div>
   );
-}
-
-function placePopupOffset(clientBox, anchor, view) {
-  const margin = 8;
-  const estW = 260;
-  const estH = 160;
-  const ar = anchor.getBoundingClientRect();
-
-  let x = clientBox.maxX + margin;
-  let y = clientBox.minY;
-
-  if (x + estW > view.width) x = Math.max(margin, clientBox.minX - estW - margin);
-  if (y + estH > view.height) y = Math.max(margin, view.height - estH - margin);
-  if (y < margin) y = margin;
-
-  return { dx: x - ar.left, dy: y - ar.top };
 }

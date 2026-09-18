@@ -11,13 +11,12 @@ import {
   signOut,
   trySilentGoogleSignIn,
 } from "../auth/googleSignIn.js";
-import { isCloudSignInAvailable } from "../auth/oauthConfig.js";
+import { isCloudSignInAvailable } from "../auth/googleSignIn.js";
 
 export default function PopupApp() {
   const [theme, setTheme] = useState("system");
   const [lassoTheme, setLassoTheme] = useState("emerald");
   const [enabled, setEnabled] = useState(true);
-  const [autoCollapse, setAutoCollapse] = useState(true);
   const [status, setStatus] = useState("");
   const [ready, setReady] = useState(false);
   const [accountEmail, setAccountEmail] = useState(null);
@@ -38,7 +37,6 @@ export default function PopupApp() {
         setTheme(s.theme);
         setLassoTheme(s.lassoTheme);
         setEnabled(s.enabled);
-        setAutoCollapse(s.autoCollapse !== false);
         setAccountEmail(active?.user?.email ?? null);
         applyThemeToDocument(s.theme);
         setReady(true);
@@ -84,7 +82,7 @@ export default function PopupApp() {
     setEnabled(value);
     await persist(
       { enabled: value },
-      value ? "Extension enabled" : "Extension disabled"
+      value ? "Extension enabled" : "Extension disabled",
     );
   };
 
@@ -114,15 +112,6 @@ export default function PopupApp() {
     }
   };
 
-  const onAutoCollapseChange = async (e) => {
-    const value = e.target.checked;
-    setAutoCollapse(value);
-    await persist(
-      { autoCollapse: value },
-      value ? "Auto-collapse on scroll enabled" : "Auto-collapse on scroll disabled"
-    );
-  };
-
   if (!ready) {
     return (
       <div className="popup-app">
@@ -145,9 +134,23 @@ export default function PopupApp() {
 
   return (
     <div className="popup-app">
-      <h1>Syncle</h1>
+      <div>
+        <h1>Syncle</h1>
+        <div className="field">
+          <label htmlFor="enabled">Drawing enabled</label>
+          <label className="toggle">
+            <input
+              id="enabled"
+              type="checkbox"
+              checked={enabled}
+              onChange={onEnabledChange}
+            />
+            <span />
+          </label>
+        </div>
+      </div>
       <p className="subtitle">Configure how the extension behaves on pages.</p>
-
+      {/* 
       <section className="popup-section">
         <h2>Account</h2>
         <p className="hint section-hint">
@@ -185,14 +188,18 @@ export default function PopupApp() {
             </p>
           )}
         </div>
-      </section>
+      </section> */}
 
       <section className="popup-section">
         <h2>Lasso colors</h2>
         <p className="hint section-hint">
           Border and fill for selections on the page.
         </p>
-        <div className="lasso-theme-grid" role="listbox" aria-label="Lasso color theme">
+        <div
+          className="lasso-theme-grid"
+          role="listbox"
+          aria-label="Lasso color theme"
+        >
           {LASSO_THEMES.map((t) => (
             <button
               key={t.id}
@@ -227,35 +234,8 @@ export default function PopupApp() {
 
       <section className="popup-section">
         <h2>General</h2>
-        <div className="field">
-          <label htmlFor="enabled">Drawing enabled</label>
-          <label className="toggle">
-            <input
-              id="enabled"
-              type="checkbox"
-              checked={enabled}
-              onChange={onEnabledChange}
-            />
-            <span />
-          </label>
-        </div>
+
         <p className="hint">Hold ⌘ or Ctrl and drag on any page to draw.</p>
-        <div className="field">
-          <label htmlFor="autoCollapse">Auto-collapse on scroll</label>
-          <label className="toggle">
-            <input
-              id="autoCollapse"
-              type="checkbox"
-              checked={autoCollapse}
-              onChange={onAutoCollapseChange}
-            />
-            <span />
-          </label>
-        </div>
-        <p className="hint">
-          When on, chat bubbles shrink to dots after you scroll about 100px. You
-          can still minimize manually with the yellow button.
-        </p>
       </section>
 
       <p className="status" aria-live="polite">
