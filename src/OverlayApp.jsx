@@ -4,19 +4,40 @@ import { createPortal } from "react-dom";
 import PopupBubble from "./components/PopupBubble.jsx";
 import uid from "./utils/uid.js";
 import { getViewportSize } from "./utils/viewport.js";
-import { loadSettings, isDrawingEnabled } from "./utils/settings.js";
+import { bboxOf, centroidOf } from "./utils/bboxOf.js";
+import { placePopupPosition } from "./utils/placePopupPosition.js";
+import {
+  clientToPage,
+  onPageScroll,
+  pageToClient,
+} from "./utils/pageCoords.js";
+import { loadSettings, isDrawingEnabled, resolvePanelTheme } from "./utils/settings.js";
 import {
   getLassoTheme,
   DEFAULT_LASSO_THEME_ID,
 } from "./utils/lassoThemes.js";
 import FloatingToolbar from "./components/FloatingToolbar.jsx";
+import SelectionToolbar from "./components/SelectionToolbar.jsx";
 import { isAiProductMode } from "./components/productModes.js";
+import {
+  subscribeMediaFullscreen,
+  setOverlayHostsHidden,
+} from "./utils/mediaFullscreen.js";
+import {
+  readPageSelection,
+  placeSelectionToolbar,
+  applyTextHighlight,
+  removeTextHighlight,
+  clearAllTextHighlights,
+  clearNativeSelection,
+  highlightFill,
+} from "./utils/textSelection.js";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
 const AI_DRAW_CURSOR =
   'url("data:image/svg+xml,%3Csvg xmlns%3D%27http%3A//www.w3.org/2000/svg%27 width%3D%2724%27 height%3D%2724%27 viewBox%3D%270 0 24 24%27%3E%3Ccircle cx%3D%279%27 cy%3D%279%27 r%3D%273%27 fill%3D%27none%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27/%3E%3Cpath d%3D%27M9 2v3M9 13v3M2 9h3M13 9h3%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27 stroke-linecap%3D%27round%27/%3E%3Cpath d%3D%27M17 4l.8 1.8L20 6.6l-2.2.8L17 9.2l-.8-1.8L14 6.6l2.2-.8z%27 fill%3D%27%23f59e0b%27/%3E%3Cpath d%3D%27M18 12l1 2.2 2.4.9-2.4.9-1 2.2-1-2.2-2.4-.9 2.4-.9z%27 fill%3D%27%23fde68a%27/%3E%3C/svg%3E") 9 9, crosshair';
 const INTERACTIVE_OVERLAY_SELECTOR =
-  ".popup-bubble, .syncle-floating-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount";
+  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount";
 
 const POPUP_Z_BASE = 2147483640;
 
@@ -27,7 +48,14 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
   const drawingEnabledRef = useRef(true);
   const isDrawingRef = useRef(false);
-  const lassoThemeRef = useRef(getLassoTheme(DEFAULT_LASSO_THEME_ID));
+  const mediaFullscreenRef = useRef(false);
+  const [lassoTheme, setLassoTheme] = useState(
+    getLassoTheme(DEFAULT_LASSO_THEME_ID)
+  );
+  const [panelTheme, setPanelTheme] = useState(resolvePanelTheme("system"));
+  const themePrefRef = useRef("system");
+  const lassoThemeRef = useRef(lassoTheme);
+  lassoThemeRef.current = lassoTheme;
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
 
@@ -36,6 +64,9 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   productModeRef.current = productMode;
 
   const [popups, setPopups] = useState([]);
+  const [selectionUi, setSelectionUi] = useState(null);
+  const pendingSelRef = useRef(null);
+  const textHighlightsRef = useRef(new Map());
 
   const liveCanvasRef = useRef(null);
   const inkCanvasRef = useRef(null);
@@ -56,17 +87,48 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     ctx.fillStyle = colors.fill;
 
     for (const poly of polysRef.current) {
-      const clientPts = poly.clientPts;
-      if (!clientPts || clientPts.length < 2) continue;
+      const pagePts = poly.pagePts;
+      if (!pagePts || pagePts.length < 2) continue;
 
+      const first = pageToClient(pagePts[0].x, pagePts[0].y);
       ctx.beginPath();
-      ctx.moveTo(clientPts[0].x, clientPts[0].y);
-      for (let i = 1; i < clientPts.length; i++) {
-        ctx.lineTo(clientPts[i].x, clientPts[i].y);
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < pagePts.length; i++) {
+        const pt = pageToClient(pagePts[i].x, pagePts[i].y);
+        ctx.lineTo(pt.x, pt.y);
       }
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
+    }
+
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    for (const { range, border } of textHighlightsRef.current.values()) {
+      let rects;
+      try {
+        if (!range || range.collapsed) continue;
+        rects = range.getClientRects();
+      } catch {
+        continue;
+      }
+      ctx.strokeStyle = border;
+      for (const r of rects) {
+        if (r.width < 1 || r.height < 1) continue;
+        const x = r.left - 1.5;
+        const y = r.top - 1.5;
+        const w = r.width + 3;
+        const h = r.height + 3;
+        ctx.beginPath();
+        if (typeof ctx.roundRect === "function") {
+          ctx.roundRect(x, y, w, h, 3);
+        } else {
+          ctx.rect(x, y, w, h);
+        }
+        ctx.stroke();
+      }
     }
   };
 
@@ -78,13 +140,15 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     const pts = pointsRef.current;
     if (pts.length < 1) return;
 
+    const first = pageToClient(pts[0].x, pts[0].y);
     ctx.beginPath();
-    ctx.moveTo(pts[0].clientX, pts[0].clientY);
+    ctx.moveTo(first.x, first.y);
     for (let i = 1; i < pts.length; i++) {
-      ctx.lineTo(pts[i].clientX, pts[i].clientY);
+      const pt = pageToClient(pts[i].x, pts[i].y);
+      ctx.lineTo(pt.x, pt.y);
     }
     if (pts.length > 1) {
-      ctx.lineTo(pts[0].clientX, pts[0].clientY);
+      ctx.lineTo(first.x, first.y);
     }
 
     ctx.strokeStyle = lassoThemeRef.current.border;
@@ -136,8 +200,14 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     const vv = window.visualViewport;
     vv?.addEventListener("resize", onWinResize, { passive: true });
 
+    const stopScroll = onPageScroll(() => {
+      redrawInk();
+      if (isDrawingRef.current) drawLive();
+    });
+
     return () => {
       ro.disconnect();
+      stopScroll();
       window.removeEventListener("resize", onWinResize);
       vv?.removeEventListener("resize", onWinResize);
       if (onWinResize._r) cancelAnimationFrame(onWinResize._r);
@@ -145,11 +215,24 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   }, []);
 
   useEffect(() => {
+    return subscribeMediaFullscreen((hidden) => {
+      mediaFullscreenRef.current = hidden;
+      setOverlayHostsHidden(hidden);
+      if (hidden) cancelLive();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     loadSettings().then((s) => {
       const on = isDrawingEnabled(s);
       drawingEnabledRef.current = on;
       setDrawingEnabled(on);
-      lassoThemeRef.current = getLassoTheme(s.lassoTheme);
+      themePrefRef.current = s.theme || "system";
+      setPanelTheme(resolvePanelTheme(themePrefRef.current));
+      const theme = getLassoTheme(s.lassoTheme);
+      lassoThemeRef.current = theme;
+      setLassoTheme(theme);
       redrawInk();
     });
 
@@ -166,15 +249,74 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         }
       }
 
+      if (changes.theme !== undefined) {
+        themePrefRef.current = changes.theme.newValue || "system";
+        setPanelTheme(resolvePanelTheme(themePrefRef.current));
+      }
+
       if (changes.lassoTheme !== undefined) {
-        lassoThemeRef.current = getLassoTheme(changes.lassoTheme.newValue);
+        const theme = getLassoTheme(changes.lassoTheme.newValue);
+        lassoThemeRef.current = theme;
+        setLassoTheme(theme);
         redrawInk();
         if (isDrawingRef.current) drawLive();
       }
     };
     chrome.storage.onChanged.addListener(onStorageChange);
-    return () => chrome.storage.onChanged.removeListener(onStorageChange);
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onScheme = () => {
+      if (themePrefRef.current === "system") {
+        setPanelTheme(resolvePanelTheme("system"));
+      }
+    };
+    mq.addEventListener("change", onScheme);
+    return () => {
+      chrome.storage.onChanged.removeListener(onStorageChange);
+      mq.removeEventListener("change", onScheme);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const showFromSelection = (e) => {
+      if (mediaFullscreenRef.current) return;
+      if (!drawingEnabledRef.current) return;
+      if (isDrawingRef.current) return;
+      if (
+        e.target instanceof Element &&
+        e.target.closest(".syncle-selection-toolbar, .popup-bubble")
+      ) {
+        return;
+      }
+
+      const next = readPageSelection();
+      if (!next) {
+        pendingSelRef.current = null;
+        setSelectionUi(null);
+        return;
+      }
+
+      pendingSelRef.current = next;
+      const placed = placeSelectionToolbar(next.box, viewportRef.current);
+      const page = clientToPage(placed.x, placed.y);
+      setSelectionUi({ pageX: page.x, pageY: page.y });
+    };
+
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        pendingSelRef.current = null;
+        setSelectionUi(null);
+      }
+    };
+
+    document.addEventListener("mouseup", showFromSelection, true);
+    document.addEventListener("keyup", showFromSelection, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mouseup", showFromSelection, true);
+      document.removeEventListener("keyup", showFromSelection, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -239,17 +381,27 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
       if (points.length >= 3) {
         const id = uid();
-        const clientPts = points.map((p) => ({
-          x: p.clientX,
-          y: p.clientY,
-        }));
+        const pagePts = points.map((p) => ({ x: p.x, y: p.y }));
+        const clientPts = pagePts.map((p) => pageToClient(p.x, p.y));
 
-        polysRef.current.push({ id, clientPts });
+        polysRef.current.push({ id, pagePts });
         redrawInk();
 
         const view = viewportRef.current;
-        const { x, y } = placePopupPosition(bboxOf(clientPts), view);
-        setPopups((prev) => [...prev, { id, x, y }]);
+        const placed = placePopupPosition(bboxOf(clientPts), view);
+        const pagePos = clientToPage(placed.x, placed.y);
+        const centroid = centroidOf(pagePts);
+        setPopups((prev) => [
+          ...prev,
+          {
+            id,
+            mode: "ask",
+            pageX: pagePos.x,
+            pageY: pagePos.y,
+            centroidPageX: centroid.x,
+            centroidPageY: centroid.y,
+          },
+        ]);
       }
 
       const { width, height } = viewportRef.current;
@@ -258,6 +410,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
     const start = (e) => {
       if (!(e instanceof PointerEvent)) return;
+      if (mediaFullscreenRef.current) return;
       if (!drawingEnabledRef.current) return;
       if (!isAiProductMode(productModeRef.current)) return;
       if (
@@ -268,13 +421,10 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       }
       if (!isHotkey(e)) return;
       if (e.button !== 0) return;
+      pendingSelRef.current = null;
+      setSelectionUi(null);
       isDrawingRef.current = true;
-      pointsRef.current = [
-        {
-          clientX: e.clientX,
-          clientY: e.clientY,
-        },
-      ];
+      pointsRef.current = [clientToPage(e.clientX, e.clientY)];
       drawLive();
       e.preventDefault();
     };
@@ -283,17 +433,11 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       if (!isDrawingRef.current) return;
       if (!isHotkey(e)) return finishCommit();
       const pts = pointsRef.current;
-      const last = pts[pts.length - 1];
-      if (
-        (e.clientX - last.clientX) ** 2 + (e.clientY - last.clientY) ** 2 <
-        2
-      ) {
+      const last = pageToClient(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      if ((e.clientX - last.x) ** 2 + (e.clientY - last.y) ** 2 < 2) {
         return;
       }
-      pts.push({
-        clientX: e.clientX,
-        clientY: e.clientY,
-      });
+      pts.push(clientToPage(e.clientX, e.clientY));
       drawLive();
       e.preventDefault();
     };
@@ -326,7 +470,59 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     };
   }, []);
 
+  const commitTextSelection = (mode) => {
+    const pending = pendingSelRef.current;
+    if (!pending?.range) return;
+    const id = uid();
+    const fill = highlightFill(lassoThemeRef.current);
+    applyTextHighlight(id, pending.range, fill);
+    textHighlightsRef.current.set(id, {
+      range: pending.range,
+      border: lassoThemeRef.current.border,
+    });
+    redrawInk();
+
+    const view = viewportRef.current;
+    const placed = placePopupPosition(pending.box, view);
+    const pagePos = clientToPage(placed.x, placed.y);
+    const centroid = clientToPage(
+      pending.box.minX + pending.box.w / 2,
+      pending.box.minY + pending.box.h / 2,
+    );
+    setPopups((prev) => [
+      ...prev,
+      {
+        id,
+        kind: "text",
+        mode,
+        text: pending.text,
+        pageX: pagePos.x,
+        pageY: pagePos.y,
+        centroidPageX: centroid.x,
+        centroidPageY: centroid.y,
+      },
+    ]);
+
+    pendingSelRef.current = null;
+    setSelectionUi(null);
+    clearNativeSelection();
+  };
+
+  const removeSelection = (id) => {
+    polysRef.current = polysRef.current.filter((poly) => poly.id !== id);
+    textHighlightsRef.current.delete(id);
+    removeTextHighlight(id);
+    setPopups((prev) => prev.filter((p) => p.id !== id));
+    redrawInk();
+  };
+
   const undo = () => {
+    const lastPopup = popups[popups.length - 1];
+    const lastPoly = polysRef.current[polysRef.current.length - 1];
+    if (lastPopup?.kind === "text" || (!lastPoly && lastPopup)) {
+      removeSelection(lastPopup.id);
+      return;
+    }
     const last = polysRef.current.pop();
     if (last) {
       setPopups((prev) => prev.filter((p) => p.id !== last.id));
@@ -336,41 +532,48 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
   const clearAll = () => {
     polysRef.current.length = 0;
+    textHighlightsRef.current.clear();
+    clearAllTextHighlights();
     setPopups([]);
+    pendingSelRef.current = null;
+    setSelectionUi(null);
     redrawInk();
   };
 
   const popupNodes = popups.map((p, stackIndex) => {
-    const poly = polysRef.current.find((poly) => poly.id === p.id);
-    if (!poly) return null;
+    if (p.kind !== "text") {
+      const poly = polysRef.current.find((poly) => poly.id === p.id);
+      if (!poly) return null;
+    }
 
     const node = (
       <PopupBubble
-        key={p.id}
-        x={p.x}
-        y={p.y}
+        pageX={p.pageX}
+        pageY={p.pageY}
+        centroidPageX={p.centroidPageX}
+        centroidPageY={p.centroidPageY}
+        dotColor={lassoTheme.border}
+        colorScheme={panelTheme}
         zIndex={POPUP_Z_BASE + stackIndex}
-      />
+        onDelete={() => removeSelection(p.id)}
+        mode={p.mode || "ask"}
+      >
+        {p.text ? (
+          <p className="popup-bubble__quote">{p.text}</p>
+        ) : null}
+      </PopupBubble>
     );
 
-    return toolbarMount ? createPortal(node, toolbarMount) : node;
+    return (
+      <React.Fragment key={p.id}>
+        {toolbarMount ? createPortal(node, toolbarMount) : node}
+      </React.Fragment>
+    );
   });
-
-  const handleProductModeChange = (mode) => {
-    setProductMode(mode);
-    if (!isAiProductMode(mode)) {
-      cancelLive();
-      setHotkeyReady(false);
-    }
-  };
 
   const toolbar = (
     <FloatingToolbar
-      productMode={productMode}
-      onProductModeChange={handleProductModeChange}
-      drawingEnabled={drawingEnabled && isAiProductMode(productMode)}
-      hotkeyReady={hotkeyReady && isAiProductMode(productMode)}
-      onUndo={undo}
+      colorScheme={panelTheme}
       onClear={clearAll}
       viewport={viewport}
     />
@@ -404,40 +607,20 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
           ? createPortal(toolbar, toolbarMount)
           : toolbar}
 
+      {selectionUi
+        ? createPortal(
+            <SelectionToolbar
+              pageX={selectionUi.pageX}
+              pageY={selectionUi.pageY}
+              colorScheme={panelTheme}
+              onComment={() => commitTextSelection("comment")}
+              onAsk={() => commitTextSelection("ask")}
+            />,
+            toolbarControlsMount || toolbarMount || document.documentElement,
+          )
+        : null}
+
       {popupNodes}
     </div>
   );
-}
-
-function bboxOf(pts) {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const p of pts) {
-    if (p.x < minX) minX = p.x;
-    if (p.y < minY) minY = p.y;
-    if (p.x > maxX) maxX = p.x;
-    if (p.y > maxY) maxY = p.y;
-  }
-  return { minX, minY, maxX, maxY, w: maxX - minX, h: maxY - minY };
-}
-
-function placePopupPosition(clientBox, view) {
-  const margin = 8;
-  const estW = 260;
-  const estH = 160;
-
-  let x = clientBox.maxX + margin;
-  let y = clientBox.minY;
-
-  if (x + estW > view.width) {
-    x = Math.max(margin, clientBox.minX - estW - margin);
-  }
-  if (y + estH > view.height) {
-    y = Math.max(margin, view.height - estH - margin);
-  }
-  if (y < margin) y = margin;
-
-  return { x, y };
 }

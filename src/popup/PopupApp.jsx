@@ -82,7 +82,7 @@ export default function PopupApp() {
     setEnabled(value);
     await persist(
       { enabled: value },
-      value ? "Extension enabled" : "Extension disabled"
+      value ? "Extension enabled" : "Extension disabled",
     );
   };
 
@@ -134,9 +134,23 @@ export default function PopupApp() {
 
   return (
     <div className="popup-app">
-      <h1>Syncle</h1>
+      <div>
+        <h1>Syncle</h1>
+        <div className="field">
+          <label htmlFor="enabled">Drawing enabled</label>
+          <label className="toggle">
+            <input
+              id="enabled"
+              type="checkbox"
+              checked={enabled}
+              onChange={onEnabledChange}
+            />
+            <span />
+          </label>
+        </div>
+      </div>
       <p className="subtitle">Configure how the extension behaves on pages.</p>
-
+      {/* 
       <section className="popup-section">
         <h2>Account</h2>
         <p className="hint section-hint">
@@ -174,14 +188,18 @@ export default function PopupApp() {
             </p>
           )}
         </div>
-      </section>
+      </section> */}
 
       <section className="popup-section">
         <h2>Lasso colors</h2>
         <p className="hint section-hint">
           Border and fill for selections on the page.
         </p>
-        <div className="lasso-theme-grid" role="listbox" aria-label="Lasso color theme">
+        <div
+          className="lasso-theme-grid"
+          role="listbox"
+          aria-label="Lasso color theme"
+        >
           {LASSO_THEMES.map((t) => (
             <button
               key={t.id}
@@ -216,18 +234,7 @@ export default function PopupApp() {
 
       <section className="popup-section">
         <h2>General</h2>
-        <div className="field">
-          <label htmlFor="enabled">Drawing enabled</label>
-          <label className="toggle">
-            <input
-              id="enabled"
-              type="checkbox"
-              checked={enabled}
-              onChange={onEnabledChange}
-            />
-            <span />
-          </label>
-        </div>
+
         <p className="hint">Hold ⌘ or Ctrl and drag on any page to draw.</p>
       </section>
 
