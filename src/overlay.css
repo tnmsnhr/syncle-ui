@@ -14,6 +14,21 @@
   touch-action: none;
 }
 
+/* Hotkey draw cursor — pointer.svg follows the mouse (CSS url() cursors fail in CS) */
+.syncle-draw-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  /* Tip ≈ (14, 13) in 32×32 */
+  margin: -13px 0 0 -14px;
+  z-index: 2147483647;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+}
+
 /* Compact frosted hub; tray expands left/right from the hub */
 .syncle-floating-toolbar {
   --bubble-bg: rgba(255, 255, 255, 0.38);
@@ -91,6 +106,9 @@
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
+  /* Keep icons outside the hub cutout; some pages break mask compositing */
+  -webkit-mask-image: none;
+  mask-image: none;
   transition:
     transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 120ms ease,
@@ -101,32 +119,12 @@
   left: 0;
   padding: 0 10px 0 var(--hub-size);
   transform: translateY(-50%) translateX(calc(-100% + var(--hub-size)));
-  -webkit-mask-image: radial-gradient(
-    circle calc(var(--hub-size) / 2) at calc(var(--hub-size) / 2) 50%,
-    transparent calc(var(--hub-size) / 2 - 0.5px),
-    #000 calc(var(--hub-size) / 2)
-  );
-  mask-image: radial-gradient(
-    circle calc(var(--hub-size) / 2) at calc(var(--hub-size) / 2) 50%,
-    transparent calc(var(--hub-size) / 2 - 0.5px),
-    #000 calc(var(--hub-size) / 2)
-  );
 }
 
 .syncle-floating-toolbar[data-expand="left"] .syncle-toolbar-tray {
   right: 0;
   padding: 0 var(--hub-size) 0 10px;
   transform: translateY(-50%) translateX(calc(100% - var(--hub-size)));
-  -webkit-mask-image: radial-gradient(
-    circle calc(var(--hub-size) / 2) at calc(100% - var(--hub-size) / 2) 50%,
-    transparent calc(var(--hub-size) / 2 - 0.5px),
-    #000 calc(var(--hub-size) / 2)
-  );
-  mask-image: radial-gradient(
-    circle calc(var(--hub-size) / 2) at calc(100% - var(--hub-size) / 2) 50%,
-    transparent calc(var(--hub-size) / 2 - 0.5px),
-    #000 calc(var(--hub-size) / 2)
-  );
 }
 
 .syncle-floating-toolbar.is-open .syncle-toolbar-tray {
@@ -148,29 +146,59 @@
 }
 
 .syncle-toolbar-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+  width: 32px !important;
+  height: 32px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  color: var(--bubble-text) !important;
+  cursor: pointer !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+.syncle-toolbar-action svg {
+  display: block !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  max-width: 16px !important;
+  max-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  color: inherit !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  pointer-events: none !important;
+  flex-shrink: 0 !important;
 }
 
 .syncle-toolbar-action:hover {
-  background: color-mix(in srgb, var(--bubble-text) 10%, transparent);
+  background: color-mix(in srgb, var(--bubble-text) 10%, transparent) !important;
 }
 
 .syncle-toolbar-action.is-danger:hover {
-  color: #dc2626;
+  color: #dc2626 !important;
 }
 
 .syncle-toolbar-action.is-on {
-  color: #2563eb;
+  color: #2563eb !important;
 }
 
 .syncle-toolbar-ring {

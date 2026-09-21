@@ -23,8 +23,9 @@
   color: var(--bubble-text);
   overflow: visible;
   max-height: var(--bubble-max-height);
+  /* Don't transition background — expanding from the themed collapse
+     dot would flash the lasso color into the frosted panel. */
   transition:
-    background 180ms ease,
     box-shadow 180ms ease,
     border-color 180ms ease,
     color 180ms ease;

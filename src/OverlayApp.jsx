@@ -32,10 +32,9 @@ import {
   clearNativeSelection,
   highlightFill,
 } from "./utils/textSelection.js";
+import pointerUrl from "./assets/svg/pointer.svg";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
-const AI_DRAW_CURSOR =
-  'url("data:image/svg+xml,%3Csvg xmlns%3D%27http%3A//www.w3.org/2000/svg%27 width%3D%2724%27 height%3D%2724%27 viewBox%3D%270 0 24 24%27%3E%3Ccircle cx%3D%279%27 cy%3D%279%27 r%3D%273%27 fill%3D%27none%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27/%3E%3Cpath d%3D%27M9 2v3M9 13v3M2 9h3M13 9h3%27 stroke%3D%27%232563eb%27 stroke-width%3D%271.6%27 stroke-linecap%3D%27round%27/%3E%3Cpath d%3D%27M17 4l.8 1.8L20 6.6l-2.2.8L17 9.2l-.8-1.8L14 6.6l2.2-.8z%27 fill%3D%27%23f59e0b%27/%3E%3Cpath d%3D%27M18 12l1 2.2 2.4.9-2.4.9-1 2.2-1-2.2-2.4-.9 2.4-.9z%27 fill%3D%27%23fde68a%27/%3E%3C/svg%3E") 9 9, crosshair';
 const INTERACTIVE_OVERLAY_SELECTOR =
   ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount";
 
@@ -72,9 +71,19 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   const inkCanvasRef = useRef(null);
   const pointsRef = useRef([]);
   const polysRef = useRef([]);
+  const drawCursorRef = useRef(null);
+  const pointerClientRef = useRef({ x: 0, y: 0 });
 
   const liveCtx = () => liveCanvasRef.current?.getContext("2d");
   const inkCtx = () => inkCanvasRef.current?.getContext("2d");
+  const showDrawCursor =
+    drawingEnabled && isAiProductMode(productMode) && hotkeyReady;
+
+  const placeDrawCursor = (x, y) => {
+    const el = drawCursorRef.current;
+    if (!el) return;
+    el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+  };
 
   const redrawInk = () => {
     const ctx = inkCtx();
@@ -343,9 +352,20 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   }, []);
 
   useEffect(() => {
-    const shouldShowDrawCursor =
-      drawingEnabled && isAiProductMode(productMode) && hotkeyReady;
-    if (!shouldShowDrawCursor) return;
+    const track = (e) => {
+      pointerClientRef.current = { x: e.clientX, y: e.clientY };
+      placeDrawCursor(e.clientX, e.clientY);
+    };
+    window.addEventListener("pointermove", track, { capture: true });
+    return () =>
+      window.removeEventListener("pointermove", track, { capture: true });
+  }, []);
+
+  useEffect(() => {
+    if (!showDrawCursor) return;
+
+    const { x, y } = pointerClientRef.current;
+    placeDrawCursor(x, y);
 
     const rootStyle = document.documentElement.style;
     const bodyStyle = document.body?.style;
@@ -354,8 +374,8 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     const prevBodyCursor = bodyStyle?.getPropertyValue("cursor") ?? "";
     const prevBodyPriority = bodyStyle?.getPropertyPriority("cursor") ?? "";
 
-    rootStyle.setProperty("cursor", AI_DRAW_CURSOR, "important");
-    bodyStyle?.setProperty("cursor", AI_DRAW_CURSOR, "important");
+    rootStyle.setProperty("cursor", "none", "important");
+    bodyStyle?.setProperty("cursor", "none", "important");
 
     return () => {
       if (prevRootCursor) {
@@ -371,7 +391,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         bodyStyle.removeProperty("cursor");
       }
     };
-  }, [drawingEnabled, hotkeyReady, productMode]);
+  }, [showDrawCursor]);
 
   useEffect(() => {
     const finishCommit = () => {
@@ -600,6 +620,19 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         className="draw-canvas-wrap"
         style={{ position: "absolute", left: 0, top: 0, pointerEvents: "none" }}
       />
+
+      {showDrawCursor ? (
+        <img
+          ref={drawCursorRef}
+          className="syncle-draw-cursor"
+          src={pointerUrl}
+          alt=""
+          width={32}
+          height={32}
+          draggable={false}
+          aria-hidden="true"
+        />
+      ) : null}
 
       {toolbarControlsMount
         ? createPortal(toolbar, toolbarControlsMount)
