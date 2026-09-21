@@ -7,6 +7,7 @@ import "./selectionToolbar.css";
 export default function SelectionToolbar({
   pageX,
   pageY,
+  scrollParents = [],
   colorScheme = "light",
   onComment,
   onAsk,
@@ -17,13 +18,13 @@ export default function SelectionToolbar({
     const el = rootRef.current;
     if (!el) return;
     const place = () => {
-      const { x, y } = pageToClient(pageX, pageY);
+      const { x, y } = pageToClient(pageX, pageY, scrollParents);
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
     };
     place();
     return onPageScroll(place);
-  }, [pageX, pageY]);
+  }, [pageX, pageY, scrollParents]);
 
   return (
     <div

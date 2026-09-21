@@ -10,6 +10,8 @@ import {
   clientToPage,
   onPageScroll,
   pageToClient,
+  resolveScrollParentsFromPoint,
+  resolveScrollParentsFromNode,
 } from "./utils/pageCoords.js";
 import { loadSettings, isDrawingEnabled, resolvePanelTheme } from "./utils/settings.js";
 import {
@@ -71,6 +73,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   const inkCanvasRef = useRef(null);
   const pointsRef = useRef([]);
   const polysRef = useRef([]);
+  const drawScrollParentsRef = useRef([]);
   const drawCursorRef = useRef(null);
   const pointerClientRef = useRef({ x: 0, y: 0 });
 
@@ -98,12 +101,13 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     for (const poly of polysRef.current) {
       const pagePts = poly.pagePts;
       if (!pagePts || pagePts.length < 2) continue;
+      const parents = poly.scrollParents || [];
 
-      const first = pageToClient(pagePts[0].x, pagePts[0].y);
+      const first = pageToClient(pagePts[0].x, pagePts[0].y, parents);
       ctx.beginPath();
       ctx.moveTo(first.x, first.y);
       for (let i = 1; i < pagePts.length; i++) {
-        const pt = pageToClient(pagePts[i].x, pagePts[i].y);
+        const pt = pageToClient(pagePts[i].x, pagePts[i].y, parents);
         ctx.lineTo(pt.x, pt.y);
       }
       ctx.closePath();
@@ -148,12 +152,13 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     ctx.clearRect(0, 0, width, height);
     const pts = pointsRef.current;
     if (pts.length < 1) return;
+    const parents = drawScrollParentsRef.current;
 
-    const first = pageToClient(pts[0].x, pts[0].y);
+    const first = pageToClient(pts[0].x, pts[0].y, parents);
     ctx.beginPath();
     ctx.moveTo(first.x, first.y);
     for (let i = 1; i < pts.length; i++) {
-      const pt = pageToClient(pts[i].x, pts[i].y);
+      const pt = pageToClient(pts[i].x, pts[i].y, parents);
       ctx.lineTo(pt.x, pt.y);
     }
     if (pts.length > 1) {
@@ -307,8 +312,15 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
       pendingSelRef.current = next;
       const placed = placeSelectionToolbar(next.box, viewportRef.current);
-      const page = clientToPage(placed.x, placed.y);
-      setSelectionUi({ pageX: page.x, pageY: page.y });
+      const parents = resolveScrollParentsFromNode(
+        next.range.commonAncestorContainer,
+      );
+      const page = clientToPage(placed.x, placed.y, parents);
+      setSelectionUi({
+        pageX: page.x,
+        pageY: page.y,
+        scrollParents: parents,
+      });
     };
 
     const onKey = (e) => {
@@ -401,15 +413,18 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
       if (points.length >= 3) {
         const id = uid();
+        const parents = drawScrollParentsRef.current;
         const pagePts = points.map((p) => ({ x: p.x, y: p.y }));
-        const clientPts = pagePts.map((p) => pageToClient(p.x, p.y));
+        const clientPts = pagePts.map((p) =>
+          pageToClient(p.x, p.y, parents),
+        );
 
-        polysRef.current.push({ id, pagePts });
+        polysRef.current.push({ id, pagePts, scrollParents: parents });
         redrawInk();
 
         const view = viewportRef.current;
         const placed = placePopupPosition(bboxOf(clientPts), view);
-        const pagePos = clientToPage(placed.x, placed.y);
+        const pagePos = clientToPage(placed.x, placed.y, parents);
         const centroid = centroidOf(pagePts);
         setPopups((prev) => [
           ...prev,
@@ -420,6 +435,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
             pageY: pagePos.y,
             centroidPageX: centroid.x,
             centroidPageY: centroid.y,
+            scrollParents: parents,
           },
         ]);
       }
@@ -444,7 +460,13 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       pendingSelRef.current = null;
       setSelectionUi(null);
       isDrawingRef.current = true;
-      pointsRef.current = [clientToPage(e.clientX, e.clientY)];
+      drawScrollParentsRef.current = resolveScrollParentsFromPoint(
+        e.clientX,
+        e.clientY,
+      );
+      pointsRef.current = [
+        clientToPage(e.clientX, e.clientY, drawScrollParentsRef.current),
+      ];
       drawLive();
       e.preventDefault();
     };
@@ -453,11 +475,16 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       if (!isDrawingRef.current) return;
       if (!isHotkey(e)) return finishCommit();
       const pts = pointsRef.current;
-      const last = pageToClient(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      const parents = drawScrollParentsRef.current;
+      const last = pageToClient(
+        pts[pts.length - 1].x,
+        pts[pts.length - 1].y,
+        parents,
+      );
       if ((e.clientX - last.x) ** 2 + (e.clientY - last.y) ** 2 < 2) {
         return;
       }
-      pts.push(clientToPage(e.clientX, e.clientY));
+      pts.push(clientToPage(e.clientX, e.clientY, parents));
       drawLive();
       e.preventDefault();
     };
@@ -502,12 +529,16 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     });
     redrawInk();
 
+    const parents = resolveScrollParentsFromNode(
+      pending.range.commonAncestorContainer,
+    );
     const view = viewportRef.current;
     const placed = placePopupPosition(pending.box, view);
-    const pagePos = clientToPage(placed.x, placed.y);
+    const pagePos = clientToPage(placed.x, placed.y, parents);
     const centroid = clientToPage(
       pending.box.minX + pending.box.w / 2,
       pending.box.minY + pending.box.h / 2,
+      parents,
     );
     setPopups((prev) => [
       ...prev,
@@ -520,6 +551,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         pageY: pagePos.y,
         centroidPageX: centroid.x,
         centroidPageY: centroid.y,
+        scrollParents: parents,
       },
     ]);
 
@@ -572,6 +604,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         pageY={p.pageY}
         centroidPageX={p.centroidPageX}
         centroidPageY={p.centroidPageY}
+        scrollParents={p.scrollParents}
         dotColor={lassoTheme.border}
         colorScheme={panelTheme}
         zIndex={POPUP_Z_BASE + stackIndex}
@@ -645,6 +678,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
             <SelectionToolbar
               pageX={selectionUi.pageX}
               pageY={selectionUi.pageY}
+              scrollParents={selectionUi.scrollParents}
               colorScheme={panelTheme}
               onComment={() => commitTextSelection("comment")}
               onAsk={() => commitTextSelection("ask")}

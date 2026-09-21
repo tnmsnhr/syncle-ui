@@ -24,6 +24,7 @@ const PopupBubble = ({
   centroidPageX,
   centroidPageY,
   collapseDistance = POPUP_COLLAPSE_SCROLL_PX,
+  scrollParents = [],
   dotColor = "#22c55e",
   zIndex = 2147483647,
   colorScheme = "light",
@@ -33,7 +34,9 @@ const PopupBubble = ({
   children,
 }) => {
   const rootRef = useRef(null);
-  const originRef = useRef(getScrollOffset());
+  const scrollParentsRef = useRef(scrollParents);
+  scrollParentsRef.current = scrollParents;
+  const originRef = useRef(getScrollOffset(scrollParents));
   const collapsedRef = useRef(false);
   const pinnedRef = useRef(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -44,14 +47,16 @@ const PopupBubble = ({
   const sizeRef = useRef({ w: 280, h: 88 });
 
   const positionDot = (el) => {
-    const { x, y } = pageToClient(centroidPageX, centroidPageY);
+    const parents = scrollParentsRef.current;
+    const { x, y } = pageToClient(centroidPageX, centroidPageY, parents);
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.style.transform = "translate(-50%, -50%)";
   };
 
   const positionPanel = (el) => {
-    const { x, y } = pageToClient(pageX, pageY);
+    const parents = scrollParentsRef.current;
+    const { x, y } = pageToClient(pageX, pageY, parents);
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.style.transform = "translate(0, 0)";
@@ -63,8 +68,9 @@ const PopupBubble = ({
     if (!pointer || collapsedRef.current) return;
     if (el.classList.contains("is-collapsed")) return;
 
-    const origin = pageToClient(pageX, pageY);
-    const c = pageToClient(centroidPageX, centroidPageY);
+    const parents = scrollParentsRef.current;
+    const origin = pageToClient(pageX, pageY, parents);
+    const c = pageToClient(centroidPageX, centroidPageY, parents);
     let w = el.offsetWidth;
     let h = el.offsetHeight;
     if (w > 80 && h > 40) {
@@ -100,10 +106,12 @@ const PopupBubble = ({
     if (!el) return;
 
     const apply = () => {
+      const parents = scrollParentsRef.current;
       if (
         !pinnedRef.current &&
         !collapsedRef.current &&
-        scrollDelta(getScrollOffset(), originRef.current) >= collapseDistance
+        scrollDelta(getScrollOffset(parents), originRef.current) >=
+          collapseDistance
       ) {
         collapsedRef.current = true;
         setCollapsed(true);
@@ -127,13 +135,14 @@ const PopupBubble = ({
     collapseDistance,
     collapsed,
     messages,
+    scrollParents,
   ]);
 
   const expandFromDot = (e) => {
     if (!collapsedRef.current) return;
     e.preventDefault();
     e.stopPropagation();
-    originRef.current = getScrollOffset();
+    originRef.current = getScrollOffset(scrollParentsRef.current);
     collapsedRef.current = false;
     setCollapsed(false);
     const el = rootRef.current;
@@ -174,7 +183,7 @@ const PopupBubble = ({
     pinnedRef.current = next;
     setPinned(next);
     if (!next) {
-      originRef.current = getScrollOffset();
+      originRef.current = getScrollOffset(scrollParentsRef.current);
     }
   };
 

@@ -1,4 +1,4 @@
-import { clientToPage } from "./pageCoords.js";
+import { clientToPage, resolveScrollParentsFromNode } from "./pageCoords.js";
 
 const OVERLAY_UI =
   ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount, #draw-on-web-root-host";
@@ -115,13 +115,17 @@ export function placeSelectionToolbar(clientBox, view, size = { w: 198, h: 36 })
   return { x, y: Math.max(margin, bottomY), side: "bottom" };
 }
 
-export function selectionToPagePopup(box) {
+export function selectionToPagePopup(box, range) {
   const centroidClient = {
     x: box.minX + box.w / 2,
     y: box.minY + box.h / 2,
   };
+  const parents = range
+    ? resolveScrollParentsFromNode(range.commonAncestorContainer)
+    : [];
   return {
-    centroidPage: clientToPage(centroidClient.x, centroidClient.y),
+    centroidPage: clientToPage(centroidClient.x, centroidClient.y, parents),
+    scrollParents: parents,
     box,
   };
 }
