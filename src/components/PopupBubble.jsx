@@ -7,6 +7,9 @@ import {
   pageToClient,
   POPUP_COLLAPSE_SCROLL_PX,
 } from "../utils/pageCoords.js";
+import { rangeClientBox } from "../utils/textSelection.js";
+import { placePopupPosition } from "../utils/placePopupPosition.js";
+import { getViewportSize } from "../utils/viewport.js";
 import "./popupBubble.css";
 
 function scrollDelta(a, b) {
@@ -18,6 +21,16 @@ function stopBubble(e) {
   e.stopPropagation();
 }
 
+function liveRangeBox(range) {
+  if (!range) return null;
+  try {
+    if (range.collapsed) return null;
+    return rangeClientBox(range);
+  } catch {
+    return null;
+  }
+}
+
 const PopupBubble = ({
   pageX,
   pageY,
@@ -25,6 +38,8 @@ const PopupBubble = ({
   centroidPageY,
   collapseDistance = POPUP_COLLAPSE_SCROLL_PX,
   scrollParents = [],
+  /** Live DOM Range — text marks reflow with this on resize/scroll. */
+  anchorRange = null,
   dotColor = "#22c55e",
   zIndex = 2147483647,
   colorScheme = "light",
@@ -40,6 +55,8 @@ const PopupBubble = ({
   const inputRef = useRef(null);
   const scrollParentsRef = useRef(scrollParents);
   scrollParentsRef.current = scrollParents;
+  const anchorRangeRef = useRef(anchorRange);
+  anchorRangeRef.current = anchorRange;
   const originRef = useRef(getScrollOffset(scrollParents));
   const collapsedRef = useRef(Boolean(startCollapsed));
   const pinnedRef = useRef(false);
@@ -53,7 +70,6 @@ const PopupBubble = ({
   const messages = controlled ? messagesProp : localMessages;
 
   const focusInput = () => {
-    // Wait a frame so the panel is visible (inner is display:none while collapsed).
     requestAnimationFrame(() => {
       const el = inputRef.current;
       if (!el || collapsedRef.current) return;
@@ -71,31 +87,37 @@ const PopupBubble = ({
     return undefined;
   }, [collapsed]);
 
-  const positionDot = (el) => {
+  const resolveClientAnchor = () => {
+    const box = liveRangeBox(anchorRangeRef.current);
+    if (box) {
+      return {
+        box,
+        centroid: {
+          x: box.minX + box.w / 2,
+          y: box.minY + box.h / 2,
+        },
+      };
+    }
     const parents = scrollParentsRef.current;
-    const { x, y } = pageToClient(centroidPageX, centroidPageY, parents);
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
+    return {
+      box: null,
+      centroid: pageToClient(centroidPageX, centroidPageY, parents),
+      panel: pageToClient(pageX, pageY, parents),
+    };
+  };
+
+  const positionDot = (el) => {
+    const { centroid } = resolveClientAnchor();
+    el.style.left = `${centroid.x}px`;
+    el.style.top = `${centroid.y}px`;
     el.style.transform = "translate(-50%, -50%)";
   };
 
-  const positionPanel = (el) => {
-    const parents = scrollParentsRef.current;
-    const { x, y } = pageToClient(pageX, pageY, parents);
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-    el.style.transform = "translate(0, 0)";
-    placePointer(el);
-  };
-
-  const placePointer = (el) => {
+  const placePointer = (el, panelOrigin, centroid) => {
     const pointer = el.querySelector(".popup-bubble__pointer");
     if (!pointer || collapsedRef.current) return;
     if (el.classList.contains("is-collapsed")) return;
 
-    const parents = scrollParentsRef.current;
-    const origin = pageToClient(pageX, pageY, parents);
-    const c = pageToClient(centroidPageX, centroidPageY, parents);
     let w = el.offsetWidth;
     let h = el.offsetHeight;
     if (w > 80 && h > 40) {
@@ -104,8 +126,8 @@ const PopupBubble = ({
       w = sizeRef.current.w;
       h = sizeRef.current.h;
     }
-    const dx = c.x - (origin.x + w / 2);
-    const dy = c.y - (origin.y + h / 2);
+    const dx = centroid.x - (panelOrigin.x + w / 2);
+    const dy = centroid.y - (panelOrigin.y + h / 2);
     const side =
       Math.abs(dx) >= Math.abs(dy)
         ? dx < 0
@@ -118,12 +140,27 @@ const PopupBubble = ({
 
     const pad = 20;
     if (side === "left" || side === "right") {
-      const along = Math.min(h - pad, Math.max(pad, c.y - origin.y));
+      const along = Math.min(h - pad, Math.max(pad, centroid.y - panelOrigin.y));
       pointer.style.setProperty("--pointer-along", `${along}px`);
     } else {
-      const along = Math.min(w - pad, Math.max(pad, c.x - origin.x));
+      const along = Math.min(w - pad, Math.max(pad, centroid.x - panelOrigin.x));
       pointer.style.setProperty("--pointer-along", `${along}px`);
     }
+  };
+
+  const positionPanel = (el) => {
+    const anchor = resolveClientAnchor();
+    let panelOrigin;
+    if (anchor.box) {
+      const placed = placePopupPosition(anchor.box, getViewportSize());
+      panelOrigin = { x: placed.x, y: placed.y };
+    } else {
+      panelOrigin = anchor.panel;
+    }
+    el.style.left = `${panelOrigin.x}px`;
+    el.style.top = `${panelOrigin.y}px`;
+    el.style.transform = "translate(0, 0)";
+    placePointer(el, panelOrigin, anchor.centroid);
   };
 
   useLayoutEffect(() => {
@@ -151,7 +188,39 @@ const PopupBubble = ({
     };
 
     apply();
-    return onPageScroll(apply);
+    const stopScroll = onPageScroll(apply);
+
+    let frame = 0;
+    const onResize = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        apply();
+      });
+    };
+
+    window.addEventListener("resize", onResize, { passive: true });
+    window.visualViewport?.addEventListener("resize", onResize, {
+      passive: true,
+    });
+    let ro = null;
+    try {
+      if (typeof ResizeObserver === "function") {
+        ro = new ResizeObserver(onResize);
+        ro.observe(document.documentElement);
+        if (document.body) ro.observe(document.body);
+      }
+    } catch {
+      /* ignore */
+    }
+
+    return () => {
+      stopScroll();
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+      ro?.disconnect();
+    };
   }, [
     pageX,
     pageY,
@@ -161,6 +230,7 @@ const PopupBubble = ({
     collapsed,
     messages,
     scrollParents,
+    anchorRange,
   ]);
 
   const expandFromDot = (e) => {
@@ -178,9 +248,7 @@ const PopupBubble = ({
   const armExpandRef = useRef(false);
 
   const onRootPointerDown = (e) => {
-    armExpandRef.current = Boolean(
-      collapsedRef.current && e.button === 0
-    );
+    armExpandRef.current = Boolean(collapsedRef.current && e.button === 0);
   };
 
   const onRootPointerUp = (e) => {

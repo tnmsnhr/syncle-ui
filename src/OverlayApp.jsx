@@ -849,6 +849,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       if (!poly) return null;
     }
 
+    const hl = textHighlightsRef.current.get(p.id);
     const node = (
       <PopupBubble
         pageX={p.pageX}
@@ -856,6 +857,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         centroidPageX={p.centroidPageX}
         centroidPageY={p.centroidPageY}
         scrollParents={p.scrollParents}
+        anchorRange={p.kind === "text" ? hl?.range || null : null}
         dotColor={lassoTheme.border}
         colorScheme={panelTheme}
         zIndex={POPUP_Z_BASE + stackIndex}
