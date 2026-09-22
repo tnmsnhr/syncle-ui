@@ -10,8 +10,8 @@ function clip(s, n) {
 }
 
 /**
- * Build a Phase-1 MemoryObject from a capture event.
- * No embedding fields.
+ * Build a MemoryObject from a capture event.
+ * Embedding fields are filled asynchronously by embedQueue.
  */
 export function normalizeMemory({
   id,
@@ -24,10 +24,15 @@ export function normalizeMemory({
   origin,
   pageKey,
   familyKey,
+  heading = "",
   messages = [],
   tags = [],
   createdAt,
   updatedAt,
+  embedding = undefined,
+  embedModel = undefined,
+  embedDim = undefined,
+  embedText = undefined,
 }) {
   const now = new Date().toISOString();
   return {
@@ -41,10 +46,15 @@ export function normalizeMemory({
     origin,
     kind,
     title: clip(title || document.title || "", 200),
+    heading: clip(heading, 160),
     quote: clip(quote, MAX_QUOTE),
     note: clip(note, MAX_NOTE),
     messages: Array.isArray(messages) ? messages : [],
     tags: Array.isArray(tags) ? tags : [],
+    ...(embedding !== undefined ? { embedding } : {}),
+    ...(embedModel !== undefined ? { embedModel } : {}),
+    ...(embedDim !== undefined ? { embedDim } : {}),
+    ...(embedText !== undefined ? { embedText } : {}),
   };
 }
 

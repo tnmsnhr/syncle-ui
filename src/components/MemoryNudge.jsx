@@ -6,14 +6,16 @@ const DOT_MS = 700;
 const SHEET_ANIM_MS = 280;
 
 /**
- * Visit nudge: pill (few seconds) → live dot → docks on hub.
- * Approach 2: quotes / “what you were reading” — no geometry restore CTA.
+ * Visit nudge: pill → live dot → docks on hub.
+ * Exact / related (Phase 1) + highly related semantic (Phase 2).
  */
 export default function MemoryNudge({
   exactCount = 0,
   relatedCount = 0,
+  semanticCount = 0,
   exact = [],
   related = [],
+  semantic = [],
   colorScheme = "light",
   open = false,
   sheetPlacement = "above-end",
@@ -21,9 +23,10 @@ export default function MemoryNudge({
   onDismiss,
   onOpenUrl,
   onRestoreExact,
+  onDismissSemanticSite,
   nudgeKey = "",
 }) {
-  const total = exactCount + relatedCount;
+  const total = exactCount + relatedCount + semanticCount;
   const [phase, setPhase] = useState("pill"); // pill | dot | docked
   const [sheetMounted, setSheetMounted] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -63,6 +66,7 @@ export default function MemoryNudge({
   const label = [
     exactCount > 0 ? `${exactCount} on this page` : null,
     relatedCount > 0 ? `${relatedCount} in these docs` : null,
+    semanticCount > 0 ? `${semanticCount} highly related` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -179,6 +183,42 @@ export default function MemoryNudge({
                     </li>
                   ))}
                 </ul>
+              </section>
+            ) : null}
+
+            {semanticCount > 0 ? (
+              <section className="syncle-memory-nudge__section">
+                <h3>Highly related · {semanticCount}</h3>
+                <ul>
+                  {semantic.slice(0, 5).map((m) => (
+                    <li key={m.id}>
+                      <span className="syncle-memory-nudge__kind">
+                        {Math.round((m.score || 0) * 100)}%
+                      </span>
+                      <div className="syncle-memory-nudge__related-body">
+                        <span className="syncle-memory-nudge__quote">
+                          {m.quote || m.title || "Related memory"}
+                        </span>
+                        {m.sourceUrl ? (
+                          <button
+                            type="button"
+                            className="syncle-memory-nudge__link"
+                            onClick={() => onOpenUrl?.(m.sourceUrl)}
+                          >
+                            Open source
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className="syncle-memory-nudge__ghost syncle-memory-nudge__ghost-block"
+                  onClick={() => onDismissSemanticSite?.()}
+                >
+                  Don’t remind on this site today
+                </button>
               </section>
             ) : null}
           </div>

@@ -303,6 +303,14 @@
   background: color-mix(in srgb, var(--nudge-accent) 20%, transparent);
 }
 
+.syncle-memory-nudge__ghost-block {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  text-align: left;
+  opacity: 0.85;
+}
+
 .syncle-memory-nudge__section ul {
   list-style: none;
   margin: 0;

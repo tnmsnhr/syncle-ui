@@ -38,9 +38,23 @@ async function copyExtFiles() {
     path.join(distDir, "offscreen.html")
   );
   await cp(
-    path.join(publicDir, "offscreen.js"),
-    path.join(distDir, "offscreen.js")
+    path.join(publicDir, "spa-hook.js"),
+    path.join(distDir, "spa-hook.js")
   );
+
+  // ONNX WASM for MiniLM (Transformers.js)
+  const ortDir = path.join(root, "node_modules", "onnxruntime-web", "dist");
+  for (const name of [
+    "ort-wasm.wasm",
+    "ort-wasm-simd.wasm",
+    "ort-wasm-threaded.wasm",
+    "ort-wasm-simd-threaded.wasm",
+  ]) {
+    const src = path.join(ortDir, name);
+    if (await exists(src)) {
+      await cp(src, path.join(distDir, name));
+    }
+  }
 
   const background = await readFile(
     path.join(publicDir, "background.js"),
@@ -200,6 +214,11 @@ children.push(
     "npx",
     ["vite", "build", "--config", "vite.content.config.js", "--watch"],
     "content"
+  ),
+  run(
+    "npx",
+    ["vite", "build", "--config", "vite.offscreen.config.js", "--watch"],
+    "offscreen"
   )
 );
 

@@ -45,8 +45,12 @@ import {
   buildTextAnchor,
   buildLassoAnchor,
   onPageKeyChange,
+  initSemanticMemory,
+  getPageContextEmbedding,
+  dismissSemanticForOriginToday,
 } from "./memory/index.js";
 import { loadExactRestores } from "./memory/restoreExact.js";
+import { PAGE_CONTEXT_IDLE_MS } from "./memory/embedConfig.js";
 import { clearAllLassoTargetMarks, clearLassoTargetMarks } from "./utils/lassoAnchors.js";
 import { memoryMessage } from "./utils/normalizeMemory.js";
 import pointerUrl from "./assets/svg/pointer.svg";
@@ -441,7 +445,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         setNudge(null);
         return;
       }
-      if (payload.exactCount + payload.relatedCount < 1) {
+      if (payload.exactCount + payload.relatedCount + (payload.semanticCount || 0) < 1) {
         nudgeActiveRef.current = false;
         setNudge(null);
         return;
@@ -557,19 +561,41 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   useEffect(() => {
     suppressNudgeThisVisitRef.current = false;
     nudgeActiveRef.current = false;
+    initSemanticMemory(() => {
+      void getPageContextEmbedding(location.href, { force: true }).then(() => {
+        void refreshNudgeRef.current({ fromVisit: true });
+      });
+    });
     void refreshNudge({ fromVisit: true });
-    return onPageKeyChange((nextPageKey) => {
+
+    let idleTimer = 0;
+    let stopPageKey = null;
+    const warmContext = () => {
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => {
+        void getPageContextEmbedding(location.href).then(() => {
+          void refreshNudgeRef.current({ fromVisit: true });
+        });
+      }, PAGE_CONTEXT_IDLE_MS);
+    };
+    warmContext();
+
+    stopPageKey = onPageKeyChange((nextPageKey) => {
       clearVisualCaptures();
       setNudgeOpen(false);
-      // New SPA route = new visit for nudge purposes.
       suppressNudgeThisVisitRef.current = false;
       nudgeActiveRef.current = false;
       dismissedPageKeysRef.current.delete(nextPageKey);
-      // Defer one frame so location.href / title settle after soft nav.
+      warmContext();
       requestAnimationFrame(() => {
         void refreshNudgeRef.current({ fromVisit: true });
       });
     });
+
+    return () => {
+      window.clearTimeout(idleTimer);
+      stopPageKey?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -904,6 +930,32 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       }}
       onMemoryRestoreExact={() => {
         void restoreExactOnPage();
+      }}
+      onMemoryDismissSemanticSite={() => {
+        const origin = nudge?.origin || (() => {
+          try {
+            return location.origin;
+          } catch {
+            return "";
+          }
+        })();
+        void dismissSemanticForOriginToday(origin).then(() => {
+          setNudge((prev) => {
+            if (!prev) return prev;
+            const next = {
+              ...prev,
+              semantic: [],
+              semanticCount: 0,
+            };
+            if (
+              next.exactCount + next.relatedCount + next.semanticCount < 1
+            ) {
+              nudgeActiveRef.current = false;
+              return null;
+            }
+            return next;
+          });
+        });
       }}
     />
   );

@@ -219,6 +219,7 @@ export default function FloatingToolbar({
   onMemoryDismiss,
   onMemoryOpenUrl,
   onMemoryRestoreExact,
+  onMemoryDismissSemanticSite,
 }) {
   const dragStateRef = useRef({
     pointerStartX: 0,
@@ -237,7 +238,11 @@ export default function FloatingToolbar({
   const [sheetPlacement, setSheetPlacement] = useState("above-end");
 
   const hasMemory = Boolean(
-    memoryNudge && memoryNudge.exactCount + memoryNudge.relatedCount > 0,
+    memoryNudge &&
+      memoryNudge.exactCount +
+        memoryNudge.relatedCount +
+        (memoryNudge.semanticCount || 0) >
+        0,
   );
 
   const clampOpts = {
@@ -475,8 +480,10 @@ export default function FloatingToolbar({
         <MemoryNudge
           exactCount={memoryNudge.exactCount}
           relatedCount={memoryNudge.relatedCount}
+          semanticCount={memoryNudge.semanticCount || 0}
           exact={memoryNudge.exact}
           related={memoryNudge.related}
+          semantic={memoryNudge.semantic || []}
           colorScheme={colorScheme}
           open={memoryOpen}
           sheetPlacement={sheetPlacement}
@@ -485,6 +492,7 @@ export default function FloatingToolbar({
           onDismiss={onMemoryDismiss}
           onOpenUrl={onMemoryOpenUrl}
           onRestoreExact={onMemoryRestoreExact}
+          onDismissSemanticSite={onMemoryDismissSemanticSite}
         />
       ) : null}
     </div>

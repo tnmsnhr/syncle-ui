@@ -3,11 +3,23 @@
   "name": "Syncle",
   "version": "1.0.0",
   "description": "Hold ⌘ or Ctrl and lasso areas on any webpage. Open chat bubbles beside your selections.",
-  "permissions": ["tabs", "activeTab", "scripting", "offscreen", "storage", "identity"],
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "scripting",
+    "offscreen",
+    "storage",
+    "unlimitedStorage",
+    "identity"
+  ],
   "host_permissions": [
     "<all_urls>",
     "http://localhost:3001/*",
-    "http://127.0.0.1:3001/*"
+    "http://127.0.0.1:3001/*",
+    "https://huggingface.co/*",
+    "https://*.huggingface.co/*",
+    "https://cdn.jsdelivr.net/*",
+    "https://*.hf.co/*"
   ],
   "content_scripts": [
     {
@@ -22,11 +34,20 @@
     "default_popup": "popup.html"
   },
   "background": { "service_worker": "background.js" },
-   "web_accessible_resources": [
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; worker-src 'self'"
+  },
+  "web_accessible_resources": [
     {
-      "resources": ["offscreen.html", "spa-hook.js"],
+      "resources": [
+        "offscreen.html",
+        "spa-hook.js",
+        "ort-wasm.wasm",
+        "ort-wasm-simd.wasm",
+        "ort-wasm-threaded.wasm",
+        "ort-wasm-simd-threaded.wasm"
+      ],
       "matches": ["<all_urls>"]
     }
   ]
-
 }

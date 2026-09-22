@@ -17,6 +17,7 @@ export default function PopupApp() {
   const [theme, setTheme] = useState("system");
   const [lassoTheme, setLassoTheme] = useState("emerald");
   const [enabled, setEnabled] = useState(true);
+  const [semanticCrossOrigin, setSemanticCrossOrigin] = useState(true);
   const [status, setStatus] = useState("");
   const [ready, setReady] = useState(false);
   const [accountEmail, setAccountEmail] = useState(null);
@@ -37,6 +38,7 @@ export default function PopupApp() {
         setTheme(s.theme);
         setLassoTheme(s.lassoTheme);
         setEnabled(s.enabled);
+        setSemanticCrossOrigin(s.semanticCrossOrigin !== false);
         setAccountEmail(active?.user?.email ?? null);
         applyThemeToDocument(s.theme);
         setReady(true);
@@ -83,6 +85,17 @@ export default function PopupApp() {
     await persist(
       { enabled: value },
       value ? "Extension enabled" : "Extension disabled",
+    );
+  };
+
+  const onSemanticCrossOriginChange = async (e) => {
+    const value = e.target.checked;
+    setSemanticCrossOrigin(value);
+    await persist(
+      { semanticCrossOrigin: value },
+      value
+        ? "Cross-site related memories on"
+        : "Cross-site related memories off",
     );
   };
 
@@ -144,6 +157,18 @@ export default function PopupApp() {
               type="checkbox"
               checked={enabled}
               onChange={onEnabledChange}
+            />
+            <span />
+          </label>
+        </div>
+        <div className="field">
+          <label htmlFor="semanticCrossOrigin">Cross-site related notes</label>
+          <label className="toggle">
+            <input
+              id="semanticCrossOrigin"
+              type="checkbox"
+              checked={semanticCrossOrigin}
+              onChange={onSemanticCrossOriginChange}
             />
             <span />
           </label>

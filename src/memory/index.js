@@ -10,6 +10,12 @@ import {
 import { onPageKeyChange } from "../utils/spaNavigation.js";
 import { buildTextAnchor } from "../utils/textAnchors.js";
 import { buildLassoAnchor } from "../utils/lassoAnchors.js";
+import { nearestHeading } from "./pageContext.js";
+import { queueEmbedMemory, startEmbedBackfill } from "./embedQueue.js";
+import { findSemanticHits, getPageContextEmbedding } from "./relevance.js";
+import { dismissSemanticForOriginToday } from "./semanticDismiss.js";
+import { warmMiniLM } from "./embedClient.js";
+import { loadSettings } from "../utils/settings.js";
 import uid from "../utils/uid.js";
 
 export const memoryRepo = LocalMemoryRepository;
@@ -35,6 +41,7 @@ export async function saveCapture({
   const identity = currentPageIdentity(href);
   const annotationId = id || uid();
   const now = new Date().toISOString();
+  const heading = nearestHeading();
 
   const annotation = {
     id: annotationId,
@@ -60,6 +67,7 @@ export async function saveCapture({
     annotationId,
     kind: kind === "lasso" ? "lasso" : mode === "ask" ? "ask" : "comment",
     title: identity.title,
+    heading,
     quote,
     note,
     url: identity.url,
@@ -72,8 +80,16 @@ export async function saveCapture({
   });
 
   await annotationRepo.upsert(annotation);
-  await memoryRepo.upsert(memory);
-  return { annotation, memory };
+  const saved = await memoryRepo.upsert(memory);
+  // Embed inline so the next page visit can match immediately.
+  try {
+    const { embedAndPersistMemory } = await import("./embedQueue.js");
+    await embedAndPersistMemory(saved);
+  } catch (err) {
+    console.warn("[syncle] embed on save failed", err);
+    queueEmbedMemory(saved);
+  }
+  return { annotation, memory: saved };
 }
 
 export async function appendMemoryMessage(annotationId, { role, text }) {
@@ -87,12 +103,14 @@ export async function appendMemoryMessage(annotationId, { role, text }) {
   if (ann) {
     await annotationRepo.upsert({ ...ann, messages });
   }
+  let nextMem = mem;
   if (mem) {
-    await memoryRepo.upsert({
+    nextMem = await memoryRepo.upsert({
       ...mem,
       messages,
       note: mem.note || (role === "user" ? text : mem.note),
     });
+    queueEmbedMemory(nextMem);
   }
   return msg;
 }
@@ -105,8 +123,6 @@ export async function deleteCapture(id) {
 /** Wipe every annotation + memory for one pageKey (one write each). */
 export async function clearCapturesForPage(href = location.href) {
   const pageKey = pageKeyFromUrl(href);
-  // Also catch records whose stored url normalizes to this pageKey but
-  // pageKey field drifted / was missing.
   const [anns, mems] = await Promise.all([
     annotationRepo.list(),
     memoryRepo.list(),
@@ -151,22 +167,23 @@ export async function getNudgePayload(href = location.href) {
     }
   })();
 
-  const all = await memoryRepo.list();
+  const [all, settings] = await Promise.all([
+    memoryRepo.list(),
+    loadSettings(),
+  ]);
 
-  // Exact: memory belongs to this pageKey (stored key or normalized url).
-  // Do not treat a more-specific profile URL as an exact hit on the site root.
   const exact = all.filter((m) => {
     const memKey = pageKeyFromUrl(m.url || m.pageKey || "");
     const storedKey = pageKeyFromUrl(m.pageKey || m.url || "");
     return memKey === pageKey || storedKey === pageKey;
   });
 
-  // Related: same docs/family only — never bare origin (that flooded homepage).
   let related = [];
   if (isRelatedFamilyKey(familyKey, origin)) {
     related = all
       .filter((m) => {
-        const memFamily = m.familyKey || familyKeyFromUrl(m.url || m.pageKey || "");
+        const memFamily =
+          m.familyKey || familyKeyFromUrl(m.url || m.pageKey || "");
         const memKey = pageKeyFromUrl(m.url || m.pageKey || "");
         return memFamily === familyKey && memKey !== pageKey;
       })
@@ -176,14 +193,46 @@ export async function getNudgePayload(href = location.href) {
       .slice(0, 20);
   }
 
+  const excludeIds = new Set([
+    ...exact.map((m) => m.id),
+    ...related.map((m) => m.id),
+  ]);
+
+  let semantic = [];
+  try {
+    semantic = await findSemanticHits({
+      memories: all,
+      excludeIds,
+      origin,
+      href,
+      // Let findSemanticHits choose gate from the model actually used.
+      allowCrossOrigin: settings.semanticCrossOrigin !== false,
+    });
+  } catch (err) {
+    console.warn("[syncle] semantic scoring failed", err);
+  }
+
   return {
     pageKey,
     familyKey,
+    origin,
     exactCount: exact.length,
     relatedCount: related.length,
+    semanticCount: semantic.length,
     exact,
     related,
+    semantic,
   };
+}
+
+/** Kick off MiniLM warm + idle backfill once per content-script lifetime. */
+export function initSemanticMemory(onBackfillDone) {
+  try {
+    warmMiniLM();
+    startEmbedBackfill({ onDone: onBackfillDone });
+  } catch (err) {
+    console.warn("[syncle] embed backfill failed to start", err);
+  }
 }
 
 export {
@@ -194,4 +243,6 @@ export {
   familyKeyFromUrl,
   onPageKeyChange,
   isRelatedFamilyKey,
+  getPageContextEmbedding,
+  dismissSemanticForOriginToday,
 };
