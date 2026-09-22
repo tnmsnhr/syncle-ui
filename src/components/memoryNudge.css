@@ -285,6 +285,24 @@
   color: var(--nudge-muted);
 }
 
+.syncle-memory-nudge__restore {
+  display: inline-flex;
+  align-items: center;
+  margin: 8px 0 4px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in srgb, var(--nudge-accent) 40%, var(--nudge-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nudge-accent) 12%, transparent);
+  color: var(--nudge-accent);
+  font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.syncle-memory-nudge__restore:hover {
+  background: color-mix(in srgb, var(--nudge-accent) 20%, transparent);
+}
+
 .syncle-memory-nudge__section ul {
   list-style: none;
   margin: 0;

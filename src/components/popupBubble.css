@@ -174,11 +174,20 @@
   animation: syncle-dot-pulse 1.8s ease-out infinite;
 }
 
+.popup-bubble.is-collapsed.is-strong-pulse {
+  /* Same 16px dot; wider pulse halo for restored lasso centroids. */
+  animation: syncle-dot-pulse-strong 1.8s ease-out infinite;
+}
+
 .popup-bubble.is-collapsed::after {
   content: "";
   position: absolute;
   inset: -12px;
   border-radius: 50%;
+}
+
+.popup-bubble.is-collapsed.is-strong-pulse::after {
+  inset: -28px;
 }
 
 .popup-bubble.is-collapsed .popup-bubble__inner {
@@ -194,6 +203,24 @@
   70% {
     box-shadow:
       0 0 0 10px color-mix(in srgb, var(--dot-border) 0%, transparent),
+      0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--dot-border) 0%, transparent),
+      0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+}
+
+@keyframes syncle-dot-pulse-strong {
+  0% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--dot-border) 50%, transparent),
+      0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+  70% {
+    box-shadow:
+      0 0 0 26px color-mix(in srgb, var(--dot-border) 0%, transparent),
       0 4px 12px rgba(0, 0, 0, 0.12);
   }
   100% {

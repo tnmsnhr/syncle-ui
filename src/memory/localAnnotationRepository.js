@@ -71,6 +71,11 @@ export const LocalAnnotationRepository = {
     await writeAll(list.filter((a) => !set.has(a.id)));
   },
 
+  async removeByPageKey(pageKey) {
+    const list = await readAll();
+    await writeAll(list.filter((a) => a.pageKey !== pageKey));
+  },
+
   async listByPageKey(pageKey) {
     const list = await readAll();
     return list.filter((a) => a.pageKey === pageKey);

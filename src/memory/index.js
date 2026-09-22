@@ -102,6 +102,39 @@ export async function deleteCapture(id) {
   await memoryRepo.remove(id);
 }
 
+/** Wipe every annotation + memory for one pageKey (one write each). */
+export async function clearCapturesForPage(href = location.href) {
+  const pageKey = pageKeyFromUrl(href);
+  // Also catch records whose stored url normalizes to this pageKey but
+  // pageKey field drifted / was missing.
+  const [anns, mems] = await Promise.all([
+    annotationRepo.list(),
+    memoryRepo.list(),
+  ]);
+  const annIds = new Set(
+    anns
+      .filter((a) => {
+        if (a.pageKey === pageKey) return true;
+        return pageKeyFromUrl(a.url || a.pageKey || "") === pageKey;
+      })
+      .map((a) => a.id),
+  );
+  const memIds = new Set(
+    mems
+      .filter((m) => {
+        if (m.pageKey === pageKey) return true;
+        return pageKeyFromUrl(m.url || m.pageKey || "") === pageKey;
+      })
+      .map((m) => m.id),
+  );
+  const ids = [...new Set([...annIds, ...memIds])];
+  await Promise.all([
+    annotationRepo.removeMany(ids),
+    memoryRepo.removeMany(ids),
+  ]);
+  return { pageKey, removed: ids.length };
+}
+
 export async function clearAllCaptures() {
   await annotationRepo.clearAll();
   await memoryRepo.clearAll();

@@ -20,6 +20,7 @@ export default function MemoryNudge({
   onToggle,
   onDismiss,
   onOpenUrl,
+  onRestoreExact,
   nudgeKey = "",
 }) {
   const total = exactCount + relatedCount;
@@ -140,8 +141,16 @@ export default function MemoryNudge({
                     </li>
                   ))}
                 </ul>
+                <button
+                  type="button"
+                  className="syncle-memory-nudge__restore"
+                  onClick={() => onRestoreExact?.()}
+                >
+                  Show on page
+                </button>
                 <p className="syncle-memory-nudge__hint">
-                  Reminder of what you marked earlier on this page.
+                  Text marks restore in place. Lassos return as a centroid
+                  marker (area shapes are skipped — they drift).
                 </p>
               </section>
             ) : null}

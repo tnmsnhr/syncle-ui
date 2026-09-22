@@ -76,6 +76,11 @@ export const LocalMemoryRepository = {
     await writeAll(list.filter((m) => !set.has(m.id)));
   },
 
+  async removeByPageKey(pageKey) {
+    const list = await readAll();
+    await writeAll(list.filter((m) => m.pageKey !== pageKey));
+  },
+
   async listByPageKey(pageKey) {
     const list = await readAll();
     return list

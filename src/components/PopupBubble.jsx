@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Minus, Pin, Send, X } from "lucide-react";
 import uid from "../utils/uid.js";
 import {
@@ -32,22 +32,44 @@ const PopupBubble = ({
   onAsk,
   mode = "ask",
   messages: messagesProp,
+  startCollapsed = false,
+  strongPulse = false,
   children,
 }) => {
   const rootRef = useRef(null);
+  const inputRef = useRef(null);
   const scrollParentsRef = useRef(scrollParents);
   scrollParentsRef.current = scrollParents;
   const originRef = useRef(getScrollOffset(scrollParents));
-  const collapsedRef = useRef(false);
+  const collapsedRef = useRef(Boolean(startCollapsed));
   const pinnedRef = useRef(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(Boolean(startCollapsed));
   const [pinned, setPinned] = useState(false);
-  const [intro, setIntro] = useState(true);
+  const [intro, setIntro] = useState(!startCollapsed);
   const [draft, setDraft] = useState("");
   const [localMessages, setLocalMessages] = useState([]);
   const sizeRef = useRef({ w: 280, h: 88 });
   const controlled = Array.isArray(messagesProp);
   const messages = controlled ? messagesProp : localMessages;
+
+  const focusInput = () => {
+    // Wait a frame so the panel is visible (inner is display:none while collapsed).
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el || collapsedRef.current) return;
+      try {
+        el.focus({ preventScroll: true });
+      } catch {
+        el.focus();
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (collapsed) return undefined;
+    focusInput();
+    return undefined;
+  }, [collapsed]);
 
   const positionDot = (el) => {
     const parents = scrollParentsRef.current;
@@ -150,6 +172,7 @@ const PopupBubble = ({
     setCollapsed(false);
     const el = rootRef.current;
     if (el) positionPanel(el);
+    focusInput();
   };
 
   const armExpandRef = useRef(false);
@@ -212,8 +235,8 @@ const PopupBubble = ({
     <div
       ref={rootRef}
       className={`popup-bubble${collapsed ? " is-collapsed" : ""}${
-        pinned ? " is-pinned" : ""
-      }`}
+        collapsed && strongPulse ? " is-strong-pulse" : ""
+      }${pinned ? " is-pinned" : ""}`}
       data-theme={colorScheme}
       style={{
         "--bubble-z": String(zIndex),
@@ -304,6 +327,7 @@ const PopupBubble = ({
           }}
         >
           <textarea
+            ref={inputRef}
             className="popup-bubble__input"
             rows={1}
             value={draft}

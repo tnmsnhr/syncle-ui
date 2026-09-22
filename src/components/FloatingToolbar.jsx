@@ -218,6 +218,7 @@ export default function FloatingToolbar({
   onMemoryToggle,
   onMemoryDismiss,
   onMemoryOpenUrl,
+  onMemoryRestoreExact,
 }) {
   const dragStateRef = useRef({
     pointerStartX: 0,
@@ -483,6 +484,7 @@ export default function FloatingToolbar({
           onToggle={onMemoryToggle}
           onDismiss={onMemoryDismiss}
           onOpenUrl={onMemoryOpenUrl}
+          onRestoreExact={onMemoryRestoreExact}
         />
       ) : null}
     </div>
