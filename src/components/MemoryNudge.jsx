@@ -66,7 +66,8 @@ export default function MemoryNudge({
     .filter(Boolean)
     .join(" · ");
 
-  const countLabel = total > 9 ? "9+" : String(total);
+  const countLabel = total > 999 ? "999+" : String(total);
+  const wideBadge = total >= 10;
 
   return (
     <div
@@ -90,7 +91,9 @@ export default function MemoryNudge({
       ) : (
         <button
           type="button"
-          className="syncle-memory-nudge__dot"
+          className={`syncle-memory-nudge__dot${
+            wideBadge && phase === "docked" ? " is-wide" : ""
+          }`}
           onClick={onToggle}
           aria-expanded={open}
           aria-label={`${total} memories. ${label}`}

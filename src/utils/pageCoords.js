@@ -1,8 +1,7 @@
+import { isSyncleElement } from "./isolatedMount.js";
+
 /** Collapse a chat bubble into a centroid dot after this much page scroll. */
 export const POPUP_COLLAPSE_SCROLL_PX = 100;
-
-const OVERLAY_HIT =
-  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount, #draw-on-web-root-host, .syncle-draw-cursor";
 
 /** Document / visualViewport scroll (not nested overflow boxes). */
 export function getWindowScrollOffset() {
@@ -42,7 +41,7 @@ export function elementFromPointDeep(clientX, clientY) {
   const stack = document.elementsFromPoint(clientX, clientY);
   for (const el of stack) {
     if (!(el instanceof Element)) continue;
-    if (el.closest?.(OVERLAY_HIT)) continue;
+    if (isSyncleElement(el)) continue;
     return el;
   }
   return stack[0] instanceof Element ? stack[0] : null;

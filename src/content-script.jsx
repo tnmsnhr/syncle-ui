@@ -5,68 +5,67 @@ import overlayCss from "./overlay.css?inline";
 import popupBubbleCss from "./components/popupBubble.css?inline";
 import selectionToolbarCss from "./components/selectionToolbar.css?inline";
 import memoryNudgeCss from "./components/memoryNudge.css?inline";
+import { installMainWorldSpaHook } from "./utils/spaNavigation.js";
+import {
+  createIsolatedMount,
+} from "./utils/isolatedMount.js";
 
 const extensionCss = `${overlayCss}\n${popupBubbleCss}\n${selectionToolbarCss}\n${memoryNudgeCss}`;
 
 /**
- * Inject a Shadow DOM root to isolate styles from the host page.
- * Mount the React OverlayApp there; toolbar renders in light DOM so it stays visible.
+ * Shadow-isolated overlay + light-portal mounts so host page CSS cannot
+ * restyle Syncle UI (and Syncle rules never sit on document).
  */
 (function inject() {
-  if (window.__DRAW_ON_WEB_MOUNTED__) return;
+  installMainWorldSpaHook();
+
+  const existingHost = document.getElementById("draw-on-web-root-host");
+  const existingOverlay = document.getElementById("syncle-overlay-mount");
+  const existingToolbar = document.getElementById("syncle-toolbar-mount");
+  const mountsAlive =
+    existingHost?.isConnected &&
+    existingOverlay?.isConnected &&
+    existingToolbar?.isConnected;
+
+  if (window.__DRAW_ON_WEB_MOUNTED__ && mountsAlive) return;
+
+  if (existingHost) existingHost.remove();
+  if (existingOverlay) existingOverlay.remove();
+  if (existingToolbar) existingToolbar.remove();
+  document.getElementById("syncle-page-styles")?.remove();
+
   window.__DRAW_ON_WEB_MOUNTED__ = true;
 
-  const host = document.createElement("div");
-  host.setAttribute("id", "draw-on-web-root-host");
-  host.style.cssText = [
-    "position:fixed",
-    "inset:0",
-    "width:100vw",
-    "height:100vh",
-    "overflow:visible",
-    "pointer-events:none",
-    "z-index:2147483646",
-  ].join(";");
+  // Drawing canvases + draw cursor (already shadow-isolated).
+  const canvas = createIsolatedMount({
+    id: "draw-on-web-root-host",
+    css: extensionCss,
+    zIndex: 2147483646,
+  });
 
-  const overlayMount = document.createElement("div");
-  overlayMount.id = "syncle-overlay-mount";
-  overlayMount.style.cssText = [
-    "position:fixed",
-    "inset:0",
-    "pointer-events:none",
-    "z-index:2147483647",
-  ].join(";");
+  // Popups portal here.
+  const overlay = createIsolatedMount({
+    id: "syncle-overlay-mount",
+    css: extensionCss,
+    zIndex: 2147483647,
+  });
 
-  const toolbarMount = document.createElement("div");
-  toolbarMount.id = "syncle-toolbar-mount";
-  toolbarMount.style.cssText = [
-    "position:fixed",
-    "inset:0",
-    "pointer-events:none",
-    "z-index:2147483647",
-  ].join(";");
+  // Floating toolbar + selection toolbar portal here.
+  const toolbar = createIsolatedMount({
+    id: "syncle-toolbar-mount",
+    css: extensionCss,
+    zIndex: 2147483647,
+  });
 
-  const pageStyle = document.createElement("style");
-  pageStyle.id = "syncle-page-styles";
-  pageStyle.textContent = extensionCss;
+  document.documentElement.appendChild(canvas.host);
+  document.documentElement.appendChild(overlay.host);
+  document.documentElement.appendChild(toolbar.host);
 
-  document.documentElement.appendChild(host);
-  document.documentElement.appendChild(overlayMount);
-  document.documentElement.appendChild(toolbarMount);
-  document.documentElement.appendChild(pageStyle);
-
-  const shadow = host.attachShadow({ mode: "open" });
-
-  const style = document.createElement("style");
-  style.textContent = extensionCss;
-  shadow.appendChild(style);
-
-  const mount = document.createElement("div");
-  mount.className = "draw-root";
-  shadow.appendChild(mount);
-
-  const root = createRoot(mount);
+  const root = createRoot(canvas.mount);
   root.render(
-    <OverlayApp toolbarMount={overlayMount} toolbarControlsMount={toolbarMount} />
+    <OverlayApp
+      toolbarMount={overlay.mount}
+      toolbarControlsMount={toolbar.mount}
+    />,
   );
 })();

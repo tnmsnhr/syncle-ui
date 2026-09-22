@@ -24,7 +24,7 @@
   "background": { "service_worker": "background.js" },
    "web_accessible_resources": [
     {
-      "resources": ["offscreen.html"],
+      "resources": ["offscreen.html", "spa-hook.js"],
       "matches": ["<all_urls>"]
     }
   ]

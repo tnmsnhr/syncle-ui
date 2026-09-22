@@ -22,37 +22,59 @@ const DOC_SEGMENTS = new Set([
   "wiki",
 ]);
 
-export function pageKeyFromUrl(raw = location.href) {
-  let url;
+function parseUrl(raw) {
+  const fallback =
+    typeof location !== "undefined" && location.href
+      ? location.href
+      : undefined;
+  const input = raw || fallback || "";
   try {
-    url = new URL(raw, location.href);
+    return new URL(input, fallback);
   } catch {
-    return String(raw || "").split("#")[0];
+    try {
+      return new URL(input);
+    } catch {
+      return null;
+    }
   }
+}
+
+/** Normalize pathname: drop trailing slash; keep "/" only for site root. */
+export function normalizePathname(pathname = "/") {
+  let path = pathname || "/";
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  return path || "/";
+}
+
+/**
+ * Exact page identity.
+ * Root pages use `https://origin` (no trailing slash) so `/` and `` match.
+ */
+export function pageKeyFromUrl(raw = location.href) {
+  const url = parseUrl(raw);
+  if (!url) return String(raw || "").split("#")[0];
 
   const params = new URLSearchParams(url.search);
   for (const key of [...params.keys()]) {
     if (STRIP_QUERY.test(key)) params.delete(key);
   }
   const qs = params.toString();
-  let path = url.pathname || "/";
-  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
-  return `${url.origin}${path}${qs ? `?${qs}` : ""}`;
+  const path = normalizePathname(url.pathname);
+  const pathPart = path === "/" ? "" : path;
+  return `${url.origin}${pathPart}${qs ? `?${qs}` : ""}`;
 }
 
 /**
  * Same-docs / section family for related subpages.
  * Prefer origin + docs-like prefix; else origin + first path segment.
+ * Site root (`/`) has familyKey === origin and is NOT used for related matching
+ * (avoids “memory on /user showing on homepage”).
  */
 export function familyKeyFromUrl(raw = location.href) {
-  let url;
-  try {
-    url = new URL(raw, location.href);
-  } catch {
-    return pageKeyFromUrl(raw);
-  }
+  const url = parseUrl(raw);
+  if (!url) return pageKeyFromUrl(raw);
 
-  const parts = (url.pathname || "/")
+  const parts = normalizePathname(url.pathname)
     .split("/")
     .filter(Boolean)
     .map((p) => p.toLowerCase());
@@ -68,47 +90,23 @@ export function familyKeyFromUrl(raw = location.href) {
   return `${url.origin}/${parts[0]}`;
 }
 
-export function currentPageIdentity() {
-  const href = location.href;
-  return {
-    url: href.split("#")[0],
-    origin: location.origin,
-    pageKey: pageKeyFromUrl(href),
-    familyKey: familyKeyFromUrl(href),
-    title: document.title || "",
-  };
+/** True when familyKey is meaningful for related (not bare origin / site root). */
+export function isRelatedFamilyKey(familyKey, origin) {
+  if (!familyKey || !origin) return false;
+  const fk = String(familyKey).replace(/\/$/, "");
+  const o = String(origin).replace(/\/$/, "");
+  if (!fk || !o || fk === o) return false;
+  return fk.startsWith(`${o}/`);
 }
 
-/** Watch SPA navigations; callback when pageKey changes. */
-export function onPageKeyChange(callback) {
-  let last = pageKeyFromUrl();
-  const check = () => {
-    const next = pageKeyFromUrl();
-    if (next === last) return;
-    last = next;
-    callback(next);
-  };
-
-  window.addEventListener("popstate", check);
-  window.addEventListener("hashchange", check);
-  const iv = window.setInterval(check, 1200);
-
-  const wrap = (fn) =>
-    function patched(...args) {
-      const ret = fn.apply(this, args);
-      queueMicrotask(check);
-      return ret;
-    };
-  const origPush = history.pushState.bind(history);
-  const origReplace = history.replaceState.bind(history);
-  history.pushState = wrap(origPush);
-  history.replaceState = wrap(origReplace);
-
-  return () => {
-    window.removeEventListener("popstate", check);
-    window.removeEventListener("hashchange", check);
-    window.clearInterval(iv);
-    history.pushState = origPush;
-    history.replaceState = origReplace;
+export function currentPageIdentity(href = location.href) {
+  const url = parseUrl(href) || parseUrl(location.href);
+  const safeHref = href || location.href;
+  return {
+    url: String(safeHref).split("#")[0],
+    origin: url?.origin || location.origin,
+    pageKey: pageKeyFromUrl(safeHref),
+    familyKey: familyKeyFromUrl(safeHref),
+    title: document.title || "",
   };
 }

@@ -5,8 +5,9 @@ import {
   currentPageIdentity,
   pageKeyFromUrl,
   familyKeyFromUrl,
-  onPageKeyChange,
+  isRelatedFamilyKey,
 } from "../utils/pageIdentity.js";
+import { onPageKeyChange } from "../utils/spaNavigation.js";
 import { buildTextAnchor } from "../utils/textAnchors.js";
 import { buildLassoAnchor } from "../utils/lassoAnchors.js";
 import uid from "../utils/uid.js";
@@ -28,8 +29,10 @@ export async function saveCapture({
   popup = null,
   themeId = null,
   messages = [],
+  /** Capture-time href so SPA URL drift mid-gesture can't mis-key the memory. */
+  href = location.href,
 }) {
-  const identity = currentPageIdentity();
+  const identity = currentPageIdentity(href);
   const annotationId = id || uid();
   const now = new Date().toISOString();
 
@@ -107,11 +110,39 @@ export async function clearAllCaptures() {
 export async function getNudgePayload(href = location.href) {
   const pageKey = pageKeyFromUrl(href);
   const familyKey = familyKeyFromUrl(href);
-  const exact = await memoryRepo.listByPageKey(pageKey);
-  const related = await memoryRepo.listByFamilyKey(familyKey, {
-    excludePageKey: pageKey,
-    limit: 20,
+  const origin = (() => {
+    try {
+      return new URL(href, location.href).origin;
+    } catch {
+      return location.origin;
+    }
+  })();
+
+  const all = await memoryRepo.list();
+
+  // Exact: memory belongs to this pageKey (stored key or normalized url).
+  // Do not treat a more-specific profile URL as an exact hit on the site root.
+  const exact = all.filter((m) => {
+    const memKey = pageKeyFromUrl(m.url || m.pageKey || "");
+    const storedKey = pageKeyFromUrl(m.pageKey || m.url || "");
+    return memKey === pageKey || storedKey === pageKey;
   });
+
+  // Related: same docs/family only — never bare origin (that flooded homepage).
+  let related = [];
+  if (isRelatedFamilyKey(familyKey, origin)) {
+    related = all
+      .filter((m) => {
+        const memFamily = m.familyKey || familyKeyFromUrl(m.url || m.pageKey || "");
+        const memKey = pageKeyFromUrl(m.url || m.pageKey || "");
+        return memFamily === familyKey && memKey !== pageKey;
+      })
+      .sort((a, b) =>
+        String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")),
+      )
+      .slice(0, 20);
+  }
+
   return {
     pageKey,
     familyKey,
@@ -129,4 +160,5 @@ export {
   pageKeyFromUrl,
   familyKeyFromUrl,
   onPageKeyChange,
+  isRelatedFamilyKey,
 };

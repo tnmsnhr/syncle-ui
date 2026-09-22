@@ -1,7 +1,5 @@
 import { clientToPage, resolveScrollParentsFromNode } from "./pageCoords.js";
-
-const OVERLAY_UI =
-  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount, #draw-on-web-root-host";
+import { isSyncleElement } from "./isolatedMount.js";
 
 const STYLE_ID = "syncle-text-highlight-style";
 
@@ -19,9 +17,8 @@ export function highlightFill(theme) {
 }
 
 function isOverlayNode(node) {
-  const el =
-    node?.nodeType === 1 ? node : node?.parentElement;
-  return Boolean(el?.closest?.(OVERLAY_UI));
+  const el = node?.nodeType === 1 ? node : node?.parentElement;
+  return isSyncleElement(el);
 }
 
 function isIgnoredField(node) {

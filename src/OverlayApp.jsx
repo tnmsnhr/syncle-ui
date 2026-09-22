@@ -13,6 +13,7 @@ import {
   resolveScrollParentsFromPoint,
   resolveScrollParentsFromNode,
 } from "./utils/pageCoords.js";
+import { isSyncleElement } from "./utils/isolatedMount.js";
 import { loadSettings, isDrawingEnabled, resolvePanelTheme } from "./utils/settings.js";
 import {
   getLassoTheme,
@@ -51,7 +52,7 @@ import pointerUrl from "./assets/svg/pointer.svg";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
 const INTERACTIVE_OVERLAY_SELECTOR =
-  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, .syncle-memory-nudge, #syncle-overlay-mount, #syncle-toolbar-mount";
+  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, .syncle-memory-nudge";
 
 const POPUP_Z_BASE = 2147483640;
 
@@ -96,6 +97,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   const pointsRef = useRef([]);
   const polysRef = useRef([]);
   const drawScrollParentsRef = useRef([]);
+  const captureHrefRef = useRef(location.href);
   const drawCursorRef = useRef(null);
   const pointerClientRef = useRef({ x: 0, y: 0 });
 
@@ -321,7 +323,8 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       if (isDrawingRef.current) return;
       if (
         e.target instanceof Element &&
-        e.target.closest(".syncle-selection-toolbar, .popup-bubble")
+        (e.target.closest(".syncle-selection-toolbar, .popup-bubble") ||
+          isSyncleElement(e.target))
       ) {
         return;
       }
@@ -333,7 +336,8 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         return;
       }
 
-      pendingSelRef.current = next;
+      pendingSelRef.current = { ...next, href: location.href };
+      captureHrefRef.current = location.href;
       const placed = placeSelectionToolbar(next.box, viewportRef.current);
       const parents = resolveScrollParentsFromNode(
         next.range.commonAncestorContainer,
@@ -485,12 +489,17 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     suppressNudgeThisVisitRef.current = false;
     nudgeActiveRef.current = false;
     void refreshNudge({ fromVisit: true });
-    return onPageKeyChange(() => {
+    return onPageKeyChange((nextPageKey) => {
       clearVisualCaptures();
       setNudgeOpen(false);
+      // New SPA route = new visit for nudge purposes.
       suppressNudgeThisVisitRef.current = false;
       nudgeActiveRef.current = false;
-      void refreshNudgeRef.current({ fromVisit: true });
+      dismissedPageKeysRef.current.delete(nextPageKey);
+      // Defer one frame so location.href / title settle after soft nav.
+      requestAnimationFrame(() => {
+        void refreshNudgeRef.current({ fromVisit: true });
+      });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -554,6 +563,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
           popup: { pageX: pagePos.x, pageY: pagePos.y },
           themeId: lassoThemeRef.current?.id,
           messages: [],
+          href: captureHrefRef.current || location.href,
         });
       }
 
@@ -568,7 +578,8 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       if (!isAiProductMode(productModeRef.current)) return;
       if (
         e.target instanceof Element &&
-        e.target.closest(INTERACTIVE_OVERLAY_SELECTOR)
+        (e.target.closest(INTERACTIVE_OVERLAY_SELECTOR) ||
+          isSyncleElement(e.target))
       ) {
         return;
       }
@@ -577,6 +588,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       pendingSelRef.current = null;
       setSelectionUi(null);
       isDrawingRef.current = true;
+      captureHrefRef.current = location.href;
       drawScrollParentsRef.current = resolveScrollParentsFromPoint(
         e.clientX,
         e.clientY,
@@ -690,6 +702,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       popup: { pageX: pagePos.x, pageY: pagePos.y },
       themeId: lassoThemeRef.current?.id,
       messages: [],
+      href: pending.href || captureHrefRef.current || location.href,
     });
 
     pendingSelRef.current = null;

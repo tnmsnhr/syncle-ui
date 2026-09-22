@@ -4,6 +4,22 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("[syncle] background installed & running");
 });
 
+/** Notify content scripts when the tab URL changes (SPA pushState / soft nav). */
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!changeInfo.url) return;
+  try {
+    chrome.tabs.sendMessage(
+      tabId,
+      { type: "SYNCLE_URL_CHANGED", url: changeInfo.url },
+      () => {
+        void chrome.runtime.lastError;
+      },
+    );
+  } catch {
+    /* tab may have no content script */
+  }
+});
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "SYNCLE_FETCH") {
     (async () => {

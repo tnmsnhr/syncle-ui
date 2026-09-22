@@ -12,9 +12,7 @@ import {
   pageToClient,
 } from "./pageCoords.js";
 import { bboxOf } from "./bboxOf.js";
-
-const OVERLAY_HIT =
-  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, .syncle-memory-nudge, #syncle-overlay-mount, #syncle-toolbar-mount, #draw-on-web-root-host, .syncle-draw-cursor";
+import { isSyncleElement } from "./isolatedMount.js";
 
 const SKIP_TAGS = new Set([
   "html",
@@ -77,7 +75,7 @@ export function pickAnchorElement(clientX, clientY, lassoBox = null) {
 
   for (const el of stack) {
     if (!(el instanceof Element)) continue;
-    if (el.closest?.(OVERLAY_HIT)) continue;
+    if (isSyncleElement(el)) continue;
     if (isOversizedElement(el, lassoBox)) continue;
     return el;
   }
@@ -85,7 +83,7 @@ export function pickAnchorElement(clientX, clientY, lassoBox = null) {
   // Soft fallback: non-shell, even if a bit large — still never html/body.
   for (const el of stack) {
     if (!(el instanceof Element)) continue;
-    if (el.closest?.(OVERLAY_HIT)) continue;
+    if (isSyncleElement(el)) continue;
     const tag = el.tagName.toLowerCase();
     if (SKIP_TAGS.has(tag)) continue;
     if (el === document.documentElement || el === document.body) continue;
