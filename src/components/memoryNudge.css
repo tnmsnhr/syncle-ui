@@ -1,0 +1,369 @@
+.syncle-memory-nudge {
+  --nudge-bg: rgba(255, 255, 255, 0.9);
+  --nudge-text: rgba(28, 28, 30, 0.92);
+  --nudge-border: rgba(60, 60, 67, 0.18);
+  --nudge-muted: rgba(28, 28, 30, 0.55);
+  --nudge-accent: #4286f5;
+  position: absolute;
+  z-index: 30;
+  /* Let hub drag through empty space; only chip/dot/sheet capture. */
+  pointer-events: none;
+  font: 12px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--nudge-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  .syncle-memory-nudge:not([data-theme="light"]) {
+    --nudge-bg: rgba(28, 28, 30, 0.92);
+    --nudge-text: rgba(245, 245, 247, 0.92);
+    --nudge-border: rgba(255, 255, 255, 0.14);
+    --nudge-muted: rgba(245, 245, 247, 0.55);
+  }
+}
+
+.syncle-memory-nudge[data-theme="light"] {
+  --nudge-bg: rgba(255, 255, 255, 0.9);
+  --nudge-text: rgba(28, 28, 30, 0.92);
+  --nudge-border: rgba(60, 60, 67, 0.18);
+  --nudge-muted: rgba(28, 28, 30, 0.55);
+}
+
+.syncle-memory-nudge[data-theme="dark"] {
+  --nudge-bg: rgba(28, 28, 30, 0.92);
+  --nudge-text: rgba(245, 245, 247, 0.92);
+  --nudge-border: rgba(255, 255, 255, 0.14);
+  --nudge-muted: rgba(245, 245, 247, 0.55);
+}
+
+/* Pill sits above the hub — does not cover page content. */
+.syncle-memory-nudge.is-pill:not(.is-sheet-open) {
+  right: 0;
+  bottom: calc(100% + 10px);
+  animation: syncle-nudge-pill-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* While sheet is mounted, anchor to full hub so placement transforms are stable. */
+.syncle-memory-nudge.is-dot,
+.syncle-memory-nudge.is-docked,
+.syncle-memory-nudge.is-pill.is-sheet-open {
+  inset: 0;
+}
+
+.syncle-memory-nudge.is-pill.is-sheet-open .syncle-memory-nudge__chip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+}
+
+.syncle-memory-nudge.is-dot .syncle-memory-nudge__dot,
+.syncle-memory-nudge.is-docked .syncle-memory-nudge__dot {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+}
+
+.syncle-memory-nudge.is-dot .syncle-memory-nudge__dot {
+  animation: syncle-nudge-to-dot 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.syncle-memory-nudge__chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(280px, calc(100vw - 32px));
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--nudge-border);
+  border-radius: 999px;
+  background: var(--nudge-bg);
+  color: var(--nudge-text);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  cursor: pointer;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.syncle-memory-nudge__mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nudge-accent);
+  flex-shrink: 0;
+}
+
+.syncle-memory-nudge__mark.is-live {
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--nudge-accent) 45%, transparent);
+  animation: syncle-nudge-pulse 1.6s ease-out infinite;
+}
+
+.syncle-memory-nudge__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.syncle-memory-nudge__dot {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--nudge-bg);
+  border-radius: 50%;
+  background: var(--nudge-accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+
+.syncle-memory-nudge__dot-pulse {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--nudge-accent) 55%, transparent);
+  animation: syncle-nudge-pulse 1.6s ease-out infinite;
+  pointer-events: none;
+}
+
+.syncle-memory-nudge.is-docked .syncle-memory-nudge__dot {
+  width: 18px;
+  height: 18px;
+}
+
+.syncle-memory-nudge__dot-count {
+  position: relative;
+  z-index: 1;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  color: #fff;
+}
+
+.syncle-memory-nudge__sheet {
+  --hub: 50px;
+  --sheet-gap: 12px;
+  --place-x: calc(var(--hub) - 100%);
+  --place-y: calc(-100% - var(--sheet-gap));
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(380px, calc(100vh - 100px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--nudge-border);
+  border-radius: 14px;
+  background: var(--nudge-bg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  transform: translate(var(--place-x), var(--place-y)) scale(0.94);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease,
+    visibility 0s linear 220ms;
+}
+
+.syncle-memory-nudge__sheet.is-open {
+  transform: translate(var(--place-x), var(--place-y)) scale(1);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease,
+    visibility 0s;
+}
+
+/* Placement via CSS vars so edge flips animate through transform. */
+.syncle-memory-nudge[data-sheet="above-end"] .syncle-memory-nudge__sheet {
+  --place-x: calc(var(--hub) - 100%);
+  --place-y: calc(-100% - var(--sheet-gap));
+}
+
+.syncle-memory-nudge[data-sheet="above-start"] .syncle-memory-nudge__sheet {
+  --place-x: 0px;
+  --place-y: calc(-100% - var(--sheet-gap));
+}
+
+.syncle-memory-nudge[data-sheet="below-end"] .syncle-memory-nudge__sheet {
+  --place-x: calc(var(--hub) - 100%);
+  --place-y: calc(var(--hub) + var(--sheet-gap));
+}
+
+.syncle-memory-nudge[data-sheet="below-start"] .syncle-memory-nudge__sheet {
+  --place-x: 0px;
+  --place-y: calc(var(--hub) + var(--sheet-gap));
+}
+
+.syncle-memory-nudge.is-pill .syncle-memory-nudge__sheet {
+  --sheet-gap: 8px;
+}
+
+.syncle-memory-nudge__sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 12px 12px 8px;
+}
+
+.syncle-memory-nudge__sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 8px 12px 12px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--nudge-text) 28%, transparent) transparent;
+}
+
+.syncle-memory-nudge__sheet-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.syncle-memory-nudge__sheet-body::-webkit-scrollbar-track {
+  margin: 4px 0;
+  background: transparent;
+}
+
+.syncle-memory-nudge__sheet-body::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--nudge-text) 28%, transparent);
+}
+
+.syncle-memory-nudge__sheet-body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--nudge-text) 42%, transparent);
+}
+
+.syncle-memory-nudge__section {
+  margin-top: 8px;
+}
+
+.syncle-memory-nudge__section:first-child {
+  margin-top: 0;
+}
+
+.syncle-memory-nudge__section h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--nudge-muted);
+}
+
+.syncle-memory-nudge__section ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.syncle-memory-nudge__section li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--nudge-text) 5%, transparent);
+}
+
+.syncle-memory-nudge__kind {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--nudge-accent);
+  padding-top: 2px;
+}
+
+.syncle-memory-nudge__quote {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--nudge-text);
+}
+
+.syncle-memory-nudge__related-body {
+  display: grid;
+  gap: 4px;
+}
+
+.syncle-memory-nudge__ghost,
+.syncle-memory-nudge__link {
+  border: none;
+  background: transparent;
+  color: var(--nudge-accent);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+}
+
+.syncle-memory-nudge__ghost {
+  color: var(--nudge-muted);
+  font-weight: 500;
+}
+
+.syncle-memory-nudge__link {
+  justify-self: start;
+  font-size: 11px;
+}
+
+.syncle-memory-nudge__hint {
+  margin: 8px 0 0;
+  color: var(--nudge-muted);
+  font-size: 11px;
+}
+
+@keyframes syncle-nudge-pill-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes syncle-nudge-to-dot {
+  from {
+    opacity: 0.4;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes syncle-nudge-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--nudge-accent) 45%, transparent);
+    opacity: 1;
+  }
+  70% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--nudge-accent) 0%, transparent);
+    opacity: 0.35;
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--nudge-accent) 0%, transparent);
+    opacity: 0;
+  }
+}

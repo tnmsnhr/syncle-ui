@@ -31,6 +31,7 @@ const PopupBubble = ({
   onDelete,
   onAsk,
   mode = "ask",
+  messages: messagesProp,
   children,
 }) => {
   const rootRef = useRef(null);
@@ -43,8 +44,10 @@ const PopupBubble = ({
   const [pinned, setPinned] = useState(false);
   const [intro, setIntro] = useState(true);
   const [draft, setDraft] = useState("");
-  const [messages, setMessages] = useState([]);
+  const [localMessages, setLocalMessages] = useState([]);
   const sizeRef = useRef({ w: 280, h: 88 });
+  const controlled = Array.isArray(messagesProp);
+  const messages = controlled ? messagesProp : localMessages;
 
   const positionDot = (el) => {
     const parents = scrollParentsRef.current;
@@ -196,7 +199,12 @@ const PopupBubble = ({
     const text = draft.trim();
     if (!text) return;
     setDraft("");
-    setMessages((prev) => [...prev, { id: uid(), role: "user", text }]);
+    if (!controlled) {
+      setLocalMessages((prev) => [
+        ...prev,
+        { id: uid(), role: "user", text },
+      ]);
+    }
     onAsk?.(text);
   };
 

@@ -34,11 +34,24 @@ import {
   clearNativeSelection,
   highlightFill,
 } from "./utils/textSelection.js";
+import {
+  saveCapture,
+  appendMemoryMessage,
+  deleteCapture,
+  getNudgePayload,
+  annotationRepo,
+  currentPageIdentity,
+  buildTextAnchor,
+  buildLassoAnchor,
+  onPageKeyChange,
+} from "./memory/index.js";
+import { clearAllLassoTargetMarks, clearLassoTargetMarks } from "./utils/lassoAnchors.js";
+import { memoryMessage } from "./utils/normalizeMemory.js";
 import pointerUrl from "./assets/svg/pointer.svg";
 
 const isHotkey = (e) => e.metaKey || e.ctrlKey;
 const INTERACTIVE_OVERLAY_SELECTOR =
-  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, #syncle-overlay-mount, #syncle-toolbar-mount";
+  ".popup-bubble, .syncle-floating-toolbar, .syncle-selection-toolbar, .syncle-memory-nudge, #syncle-overlay-mount, #syncle-toolbar-mount";
 
 const POPUP_Z_BASE = 2147483640;
 
@@ -66,8 +79,17 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
   const [popups, setPopups] = useState([]);
   const [selectionUi, setSelectionUi] = useState(null);
+  const [nudge, setNudge] = useState(null);
+  const [nudgeOpen, setNudgeOpen] = useState(false);
   const pendingSelRef = useRef(null);
   const textHighlightsRef = useRef(new Map());
+  const dismissedPageKeysRef = useRef(new Set());
+  /** Suppress nudge for the rest of this page visit after first create. */
+  const suppressNudgeThisVisitRef = useRef(false);
+  const nudgeActiveRef = useRef(false);
+  const persistCaptureRef = useRef(async () => {});
+  const refreshNudgeRef = useRef(async () => {});
+  const redrawInkRef = useRef(() => {});
 
   const liveCanvasRef = useRef(null);
   const inkCanvasRef = useRef(null);
@@ -100,8 +122,8 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
     for (const poly of polysRef.current) {
       const pagePts = poly.pagePts;
-      if (!pagePts || pagePts.length < 2) continue;
       const parents = poly.scrollParents || [];
+      if (!pagePts || pagePts.length < 2) continue;
 
       const first = pageToClient(pagePts[0].x, pagePts[0].y, parents);
       ctx.beginPath();
@@ -144,6 +166,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       }
     }
   };
+  redrawInkRef.current = redrawInk;
 
   const drawLive = () => {
     const ctx = liveCtx();
@@ -405,6 +428,73 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     };
   }, [showDrawCursor]);
 
+  const refreshNudge = async ({ fromVisit = false } = {}) => {
+    try {
+      const payload = await getNudgePayload();
+      if (dismissedPageKeysRef.current.has(payload.pageKey)) {
+        nudgeActiveRef.current = false;
+        setNudge(null);
+        return;
+      }
+      if (payload.exactCount + payload.relatedCount < 1) {
+        nudgeActiveRef.current = false;
+        setNudge(null);
+        return;
+      }
+      // Creating on this visit must not surface the revisit nudge.
+      if (suppressNudgeThisVisitRef.current) {
+        nudgeActiveRef.current = false;
+        setNudge(null);
+        return;
+      }
+      // Start only on visit/load; allow updates if already showing.
+      if (!fromVisit && !nudgeActiveRef.current) return;
+      nudgeActiveRef.current = true;
+      setNudge(payload);
+    } catch (err) {
+      console.warn("[syncle] nudge load failed", err);
+    }
+  };
+  refreshNudgeRef.current = refreshNudge;
+
+  const persistCapture = async (opts) => {
+    try {
+      await saveCapture(opts);
+      suppressNudgeThisVisitRef.current = true;
+      nudgeActiveRef.current = false;
+      setNudge(null);
+      setNudgeOpen(false);
+    } catch (err) {
+      console.warn("[syncle] memory save failed", err);
+    }
+  };
+  persistCaptureRef.current = persistCapture;
+
+  const clearVisualCaptures = () => {
+    polysRef.current.length = 0;
+    textHighlightsRef.current.clear();
+    clearAllTextHighlights();
+    clearAllLassoTargetMarks();
+    setPopups([]);
+    pendingSelRef.current = null;
+    setSelectionUi(null);
+    redrawInkRef.current();
+  };
+
+  useEffect(() => {
+    suppressNudgeThisVisitRef.current = false;
+    nudgeActiveRef.current = false;
+    void refreshNudge({ fromVisit: true });
+    return onPageKeyChange(() => {
+      clearVisualCaptures();
+      setNudgeOpen(false);
+      suppressNudgeThisVisitRef.current = false;
+      nudgeActiveRef.current = false;
+      void refreshNudgeRef.current({ fromVisit: true });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const finishCommit = () => {
       const points = pointsRef.current;
@@ -419,13 +509,24 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
           pageToClient(p.x, p.y, parents),
         );
 
-        polysRef.current.push({ id, pagePts, scrollParents: parents });
+        polysRef.current.push({
+          id,
+          pagePts,
+          scrollParents: parents,
+          lassoAnchor: null,
+        });
         redrawInk();
 
         const view = viewportRef.current;
         const placed = placePopupPosition(bboxOf(clientPts), view);
         const pagePos = clientToPage(placed.x, placed.y, parents);
         const centroid = centroidOf(pagePts);
+        const lassoAnchor = buildLassoAnchor(pagePts, parents);
+        if (lassoAnchor) {
+          const poly = polysRef.current.find((p) => p.id === id);
+          if (poly) poly.lassoAnchor = lassoAnchor;
+        }
+
         setPopups((prev) => [
           ...prev,
           {
@@ -436,8 +537,24 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
             centroidPageX: centroid.x,
             centroidPageY: centroid.y,
             scrollParents: parents,
+            messages: [],
+            lassoAnchor,
           },
         ]);
+
+        void persistCaptureRef.current({
+          id,
+          kind: "lasso",
+          mode: "ask",
+          quote: lassoAnchor?.primaryQuote || "",
+          pagePts,
+          lassoAnchor,
+          bboxPage: bboxOf(pagePts),
+          centroidPage: { x: centroid.x, y: centroid.y },
+          popup: { pageX: pagePos.x, pageY: pagePos.y },
+          themeId: lassoThemeRef.current?.id,
+          messages: [],
+        });
       }
 
       const { width, height } = viewportRef.current;
@@ -522,6 +639,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     if (!pending?.range) return;
     const id = uid();
     const fill = highlightFill(lassoThemeRef.current);
+    const textAnchor = buildTextAnchor(pending.range);
     applyTextHighlight(id, pending.range, fill);
     textHighlightsRef.current.set(id, {
       range: pending.range,
@@ -552,8 +670,27 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         centroidPageX: centroid.x,
         centroidPageY: centroid.y,
         scrollParents: parents,
+        messages: [],
       },
     ]);
+
+    void persistCaptureRef.current({
+      id,
+      kind: "text",
+      mode,
+      quote: pending.text,
+      textAnchor,
+      bboxPage: {
+        minX: pending.box.minX,
+        minY: pending.box.minY,
+        maxX: pending.box.maxX,
+        maxY: pending.box.maxY,
+      },
+      centroidPage: { x: centroid.x, y: centroid.y },
+      popup: { pageX: pagePos.x, pageY: pagePos.y },
+      themeId: lassoThemeRef.current?.id,
+      messages: [],
+    });
 
     pendingSelRef.current = null;
     setSelectionUi(null);
@@ -564,8 +701,12 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     polysRef.current = polysRef.current.filter((poly) => poly.id !== id);
     textHighlightsRef.current.delete(id);
     removeTextHighlight(id);
+    clearLassoTargetMarks(id);
     setPopups((prev) => prev.filter((p) => p.id !== id));
     redrawInk();
+    void deleteCapture(id).then(() => refreshNudgeRef.current()).catch((err) => {
+      console.warn("[syncle] deleteCapture failed", err);
+    });
   };
 
   const undo = () => {
@@ -579,17 +720,53 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     if (last) {
       setPopups((prev) => prev.filter((p) => p.id !== last.id));
       redrawInk();
+      void deleteCapture(last.id).then(() => refreshNudgeRef.current()).catch((err) => {
+        console.warn("[syncle] deleteCapture failed", err);
+      });
     }
   };
 
   const clearAll = () => {
+    const ids = new Set([
+      ...popups.map((p) => p.id),
+      ...polysRef.current.map((p) => p.id),
+    ]);
     polysRef.current.length = 0;
     textHighlightsRef.current.clear();
     clearAllTextHighlights();
+    clearAllLassoTargetMarks();
     setPopups([]);
     pendingSelRef.current = null;
     setSelectionUi(null);
     redrawInk();
+
+    void (async () => {
+      try {
+        const { pageKey } = currentPageIdentity();
+        const anns = await annotationRepo.listByPageKey(pageKey);
+        for (const a of anns) ids.add(a.id);
+        await Promise.all([...ids].map((id) => deleteCapture(id)));
+        nudgeActiveRef.current = false;
+        setNudge(null);
+        setNudgeOpen(false);
+      } catch (err) {
+        console.warn("[syncle] clearAll persist failed", err);
+      }
+    })();
+  };
+
+  const sendPopupMessage = (id, text) => {
+    const msg = memoryMessage({ id: uid(), role: "user", text });
+    setPopups((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, messages: [...(p.messages || []), msg] }
+          : p,
+      ),
+    );
+    void appendMemoryMessage(id, { role: "user", text }).catch((err) => {
+      console.warn("[syncle] appendMemoryMessage failed", err);
+    });
   };
 
   const popupNodes = popups.map((p, stackIndex) => {
@@ -609,7 +786,9 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         colorScheme={panelTheme}
         zIndex={POPUP_Z_BASE + stackIndex}
         onDelete={() => removeSelection(p.id)}
+        onAsk={(text) => sendPopupMessage(p.id, text)}
         mode={p.mode || "ask"}
+        messages={p.messages || []}
       >
         {p.text ? (
           <p className="popup-bubble__quote">{p.text}</p>
@@ -629,6 +808,22 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       colorScheme={panelTheme}
       onClear={clearAll}
       viewport={viewport}
+      memoryNudge={nudge}
+      memoryOpen={nudgeOpen}
+      onMemoryToggle={() => setNudgeOpen((v) => !v)}
+      onMemoryDismiss={() => {
+        if (nudge?.pageKey) dismissedPageKeysRef.current.add(nudge.pageKey);
+        nudgeActiveRef.current = false;
+        setNudge(null);
+        setNudgeOpen(false);
+      }}
+      onMemoryOpenUrl={(url) => {
+        try {
+          window.open(url, "_blank", "noopener,noreferrer");
+        } catch {
+          /* ignore */
+        }
+      }}
     />
   );
 
@@ -655,16 +850,22 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       />
 
       {showDrawCursor ? (
-        <img
+        <div
           ref={drawCursorRef}
           className="syncle-draw-cursor"
-          src={pointerUrl}
-          alt=""
-          width={32}
-          height={32}
-          draggable={false}
+          data-theme={panelTheme}
           aria-hidden="true"
-        />
+        >
+          <img
+            className="syncle-draw-cursor__pointer"
+            src={pointerUrl}
+            alt=""
+            width={32}
+            height={32}
+            draggable={false}
+          />
+          <span className="syncle-draw-cursor__hint">Drag to ask</span>
+        </div>
       ) : null}
 
       {toolbarControlsMount
