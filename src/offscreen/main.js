@@ -56,6 +56,30 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg?.type === "OFFSCREEN_EMBED_BATCH") {
+    (async () => {
+      try {
+        const texts = Array.isArray(msg.texts) ? msg.texts : [];
+        const embeddings = [];
+        for (const text of texts.slice(0, 24)) {
+          embeddings.push(await embedWithMiniLM(String(text || "")));
+        }
+        sendResponse({
+          ok: true,
+          embeddings,
+          embedModel: MINILM_MODEL,
+          embedDim: MINILM_DIM,
+        });
+      } catch (e) {
+        sendResponse({
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    })();
+    return true;
+  }
+
   if (msg?.type === "OFFSCREEN_READ_IMAGE_DIMS") {
     (async () => {
       try {

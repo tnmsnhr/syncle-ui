@@ -220,6 +220,7 @@ export default function FloatingToolbar({
   onMemoryOpenUrl,
   onMemoryRestoreExact,
   onMemoryDismissSemanticSite,
+  onMemoryRejectSemantic,
 }) {
   const dragStateRef = useRef({
     pointerStartX: 0,
@@ -493,6 +494,7 @@ export default function FloatingToolbar({
           onOpenUrl={onMemoryOpenUrl}
           onRestoreExact={onMemoryRestoreExact}
           onDismissSemanticSite={onMemoryDismissSemanticSite}
+          onRejectSemantic={onMemoryRejectSemantic}
         />
       ) : null}
     </div>

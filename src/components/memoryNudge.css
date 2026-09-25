@@ -371,6 +371,17 @@
   font-size: 11px;
 }
 
+.syncle-memory-nudge__actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.syncle-memory-nudge__reject {
+  color: var(--nudge-muted);
+  font-weight: 500;
+}
+
 .syncle-memory-nudge__hint {
   margin: 8px 0 0;
   color: var(--nudge-muted);

@@ -24,6 +24,7 @@ export default function MemoryNudge({
   onOpenUrl,
   onRestoreExact,
   onDismissSemanticSite,
+  onRejectSemantic,
   nudgeKey = "",
 }) {
   const total = exactCount + relatedCount + semanticCount;
@@ -199,15 +200,24 @@ export default function MemoryNudge({
                         <span className="syncle-memory-nudge__quote">
                           {m.quote || m.title || "Related memory"}
                         </span>
-                        {m.sourceUrl ? (
+                        <div className="syncle-memory-nudge__actions">
+                          {m.sourceUrl ? (
+                            <button
+                              type="button"
+                              className="syncle-memory-nudge__link"
+                              onClick={() => onOpenUrl?.(m.sourceUrl)}
+                            >
+                              Open source
+                            </button>
+                          ) : null}
                           <button
                             type="button"
-                            className="syncle-memory-nudge__link"
-                            onClick={() => onOpenUrl?.(m.sourceUrl)}
+                            className="syncle-memory-nudge__link syncle-memory-nudge__reject"
+                            onClick={() => onRejectSemantic?.(m.id)}
                           >
-                            Open source
+                            Not related
                           </button>
-                        ) : null}
+                        </div>
                       </div>
                     </li>
                   ))}

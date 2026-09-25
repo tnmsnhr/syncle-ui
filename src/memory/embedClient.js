@@ -105,6 +105,35 @@ export async function embedText(raw, { allowHashFallback = true } = {}) {
   return embedTextSync(text);
 }
 
+/** Embed several short strings in one offscreen pass. */
+export async function embedTexts(raws) {
+  const texts = (raws || []).map((t) => clip(t));
+  if (!texts.length) return [];
+  void warmMiniLM();
+  try {
+    const res = await sendRuntime({ type: "SYNCLE_EMBED_BATCH", texts });
+    if (
+      res?.ok &&
+      Array.isArray(res.embeddings) &&
+      res.embeddings.length === texts.length
+    ) {
+      return texts.map((text, i) => ({
+        embedding: res.embeddings[i],
+        embedModel: res.embedModel || MINILM_MODEL,
+        embedDim: res.embedDim || res.embeddings[i]?.length || 384,
+        embedText: text.slice(0, 240),
+      }));
+    }
+  } catch (err) {
+    console.warn("[syncle] batch embed failed", err);
+  }
+  const out = [];
+  for (const text of texts) {
+    out.push(await embedText(text));
+  }
+  return out;
+}
+
 export function isNeuralEmbedModel(model) {
   return Boolean(model && String(model).includes("MiniLM"));
 }

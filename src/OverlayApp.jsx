@@ -48,6 +48,7 @@ import {
   initSemanticMemory,
   getPageContextEmbedding,
   dismissSemanticForOriginToday,
+  rejectSemanticMemory,
 } from "./memory/index.js";
 import { loadExactRestores } from "./memory/restoreExact.js";
 import { PAGE_CONTEXT_IDLE_MS } from "./memory/embedConfig.js";
@@ -946,6 +947,33 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
               ...prev,
               semantic: [],
               semanticCount: 0,
+            };
+            if (
+              next.exactCount + next.relatedCount + next.semanticCount < 1
+            ) {
+              nudgeActiveRef.current = false;
+              return null;
+            }
+            return next;
+          });
+        });
+      }}
+      onMemoryRejectSemantic={(memoryId) => {
+        const origin = nudge?.origin || (() => {
+          try {
+            return location.origin;
+          } catch {
+            return "";
+          }
+        })();
+        void rejectSemanticMemory(origin, memoryId).then(() => {
+          setNudge((prev) => {
+            if (!prev) return prev;
+            const semantic = (prev.semantic || []).filter((m) => m.id !== memoryId);
+            const next = {
+              ...prev,
+              semantic,
+              semanticCount: semantic.length,
             };
             if (
               next.exactCount + next.relatedCount + next.semanticCount < 1

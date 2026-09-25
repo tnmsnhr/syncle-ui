@@ -134,11 +134,29 @@ async function embedViaOffscreen(text) {
   }
 }
 
+async function embedBatchViaOffscreen(texts) {
+  await ensureOffscreen();
+  try {
+    return await sendToOffscreen({
+      type: "OFFSCREEN_EMBED_BATCH",
+      texts,
+    });
+  } catch (err) {
+    await new Promise((r) => setTimeout(r, 150));
+    await ensureOffscreen();
+    return sendToOffscreen({
+      type: "OFFSCREEN_EMBED_BATCH",
+      texts,
+    });
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // Ignore messages that are meant for the offscreen document itself when
   // they bubble through this worker from another context incorrectly.
   if (
     msg?.type === "OFFSCREEN_EMBED" ||
+    msg?.type === "OFFSCREEN_EMBED_BATCH" ||
     msg?.type === "OFFSCREEN_EMBED_WARM" ||
     msg?.type === "OFFSCREEN_PING"
   ) {
@@ -187,6 +205,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       try {
         const res = await embedViaOffscreen(msg.text || "");
+        sendResponse(res);
+      } catch (e) {
+        sendResponse({
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    })();
+    return true;
+  }
+
+  if (msg?.type === "SYNCLE_EMBED_BATCH") {
+    (async () => {
+      try {
+        const texts = Array.isArray(msg.texts) ? msg.texts : [];
+        const res = await embedBatchViaOffscreen(texts);
         sendResponse(res);
       } catch (e) {
         sendResponse({

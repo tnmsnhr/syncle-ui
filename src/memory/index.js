@@ -13,7 +13,10 @@ import { buildLassoAnchor } from "../utils/lassoAnchors.js";
 import { nearestHeading } from "./pageContext.js";
 import { queueEmbedMemory, startEmbedBackfill } from "./embedQueue.js";
 import { findSemanticHits, getPageContextEmbedding } from "./relevance.js";
-import { dismissSemanticForOriginToday } from "./semanticDismiss.js";
+import {
+  dismissSemanticForOriginToday,
+  rejectSemanticMemory,
+} from "./semanticDismiss.js";
 import { warmMiniLM } from "./embedClient.js";
 import { loadSettings } from "../utils/settings.js";
 import uid from "../utils/uid.js";
@@ -245,4 +248,5 @@ export {
   isRelatedFamilyKey,
   getPageContextEmbedding,
   dismissSemanticForOriginToday,
+  rejectSemanticMemory,
 };

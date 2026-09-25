@@ -49,3 +49,41 @@ export async function dismissSemanticForOriginToday(origin) {
   }
   await writeMap(map);
 }
+
+const REJECT_KEY = "syncle_semantic_reject_v1";
+
+function readRejects() {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get([REJECT_KEY], (items) => {
+        const raw = items?.[REJECT_KEY];
+        resolve(raw && typeof raw === "object" ? raw : {});
+      });
+    } catch {
+      resolve({});
+    }
+  });
+}
+
+/** Memory ids the user marked "not related" on this site. */
+export async function rejectedMemoryIds(origin) {
+  if (!origin) return new Set();
+  const map = await readRejects();
+  const ids = map[origin];
+  return new Set(Array.isArray(ids) ? ids : []);
+}
+
+export async function rejectSemanticMemory(origin, memoryId) {
+  if (!origin || !memoryId) return;
+  const map = await readRejects();
+  const ids = new Set(Array.isArray(map[origin]) ? map[origin] : []);
+  ids.add(memoryId);
+  map[origin] = [...ids].slice(-200);
+  await new Promise((resolve) => {
+    try {
+      chrome.storage.local.set({ [REJECT_KEY]: map }, () => resolve());
+    } catch {
+      resolve();
+    }
+  });
+}
