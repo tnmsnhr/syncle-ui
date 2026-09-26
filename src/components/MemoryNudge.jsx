@@ -1,9 +1,160 @@
 import React, { useEffect, useState } from "react";
+import {
+  ThumbsDown,
+  ChevronRight,
+  Clock,
+  ExternalLink,
+  Lasso,
+  MessageSquare,
+  Trash2,
+} from "lucide-react";
 import "./memoryNudge.css";
 
 const PILL_MS = 3200;
 const DOT_MS = 700;
 const SHEET_ANIM_MS = 280;
+
+function memoryWhen(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric",
+  });
+}
+
+function KindMark({ kind }) {
+  const lasso = kind === "lasso";
+  const label = lasso ? "Lasso" : "Comment";
+  const Icon = lasso ? Lasso : MessageSquare;
+  return (
+    <span
+      className="syncle-memory-nudge__kind-icon"
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      <Icon size={14} strokeWidth={2} aria-hidden="true" />
+    </span>
+  );
+}
+
+function siteLabel(url) {
+  if (!url) return "";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function WhenStamp({ value, label }) {
+  return (
+    <time dateTime={value}>
+      <Clock size={11} strokeWidth={2} aria-hidden="true" />
+      {label}
+    </time>
+  );
+}
+
+function MemoryWhen({ value }) {
+  const label = memoryWhen(value);
+  if (!label) return null;
+  return (
+    <span className="syncle-memory-nudge__when">
+      <WhenStamp value={value} label={label} />
+    </span>
+  );
+}
+
+function RelatedQuote({ url, onOpen, children }) {
+  if (!url) {
+    return <span className="syncle-memory-nudge__quote">{children}</span>;
+  }
+  return (
+    <button
+      type="button"
+      className="syncle-memory-nudge__quote syncle-memory-nudge__quote-link"
+      onClick={() => onOpen?.(url)}
+    >
+      {children}
+    </button>
+  );
+}
+
+function RelatedMeta({ createdAt, url }) {
+  const when = memoryWhen(createdAt);
+  const site = siteLabel(url);
+  if (!when && !site) return null;
+  return (
+    <span className="syncle-memory-nudge__when">
+      {when ? <WhenStamp value={createdAt} label={when} /> : null}
+      {site ? <span>{when ? `· ${site}` : site}</span> : null}
+    </span>
+  );
+}
+
+function MatchBar({ score }) {
+  const pct = Math.max(
+    0,
+    Math.min(100, Math.round((Number(score) || 0) * 100)),
+  );
+  return (
+    <div className="syncle-memory-nudge__match" title={`${pct}% match`}>
+      <span className="syncle-memory-nudge__match-track" aria-hidden="true">
+        <span
+          className="syncle-memory-nudge__match-fill"
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+      <span className="syncle-memory-nudge__match-pct">{pct}%</span>
+    </div>
+  );
+}
+
+function TrayButton({ label, onClick, danger = false, children }) {
+  return (
+    <button
+      type="button"
+      className={`syncle-memory-nudge__tray-btn${danger ? " is-danger" : ""}`}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function IconTray({ end, children }) {
+  return (
+    <div className="syncle-memory-nudge__tray">
+      {children}
+      <span className="syncle-memory-nudge__tray-end">{end}</span>
+    </div>
+  );
+}
+
+function NudgeFold({ title, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="syncle-memory-nudge__section">
+      <button
+        type="button"
+        className="syncle-memory-nudge__fold"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <ChevronRight size={14} strokeWidth={2.25} aria-hidden="true" />
+        <span>{title}</span>
+      </button>
+      {open ? children : null}
+    </section>
+  );
+}
 
 /**
  * Visit nudge: pill → live dot → docks on hub.
@@ -150,21 +301,29 @@ export default function MemoryNudge({
                         className="syncle-memory-nudge__jump"
                         onClick={() => onFocusExact?.(m.id)}
                       >
-                        <span className="syncle-memory-nudge__kind">
-                          {m.kind}
-                        </span>
-                        <span className="syncle-memory-nudge__quote">
-                          {m.quote || m.note || m.title || "Memory"}
+                        <KindMark kind={m.kind} />
+                        <span className="syncle-memory-nudge__jump-copy">
+                          <span className="syncle-memory-nudge__quote">
+                            {m.quote || m.note || m.title || "Memory"}
+                          </span>
+                          <MemoryWhen value={m.createdAt} />
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        className="syncle-memory-nudge__delete"
-                        aria-label="Delete memory"
-                        onClick={() => onDeleteExact?.(m.id)}
-                      >
-                        Delete
-                      </button>
+                      <IconTray
+                        end={
+                          <TrayButton
+                            label="Delete memory"
+                            danger
+                            onClick={() => onDeleteExact?.(m.id)}
+                          >
+                            <Trash2
+                              size={14}
+                              strokeWidth={2}
+                              aria-hidden="true"
+                            />
+                          </TrayButton>
+                        }
+                      />
                     </li>
                   ))}
                 </ul>
@@ -175,73 +334,79 @@ export default function MemoryNudge({
                 >
                   Show on page
                 </button>
-                <p className="syncle-memory-nudge__hint">
-                  Tap a memory to jump to it on the page.
-                </p>
               </section>
             ) : null}
 
             {relatedCount > 0 ? (
-              <section className="syncle-memory-nudge__section">
-                <h3>In these docs · {relatedCount}</h3>
+              <NudgeFold title={`In these docs · ${relatedCount}`}>
                 <ul>
                   {related.slice(0, 5).map((m) => (
                     <li key={m.id}>
-                      <span className="syncle-memory-nudge__kind">
-                        {m.kind}
-                      </span>
                       <div className="syncle-memory-nudge__related-body">
-                        <span className="syncle-memory-nudge__quote">
+                        <RelatedQuote url={m.url} onOpen={onOpenUrl}>
                           {m.quote || m.note || m.title || "Memory"}
-                        </span>
+                        </RelatedQuote>
+                        <RelatedMeta createdAt={m.createdAt} url={m.url} />
+                      </div>
+                      <IconTray>
                         {m.url ? (
-                          <button
-                            type="button"
-                            className="syncle-memory-nudge__link"
+                          <TrayButton
+                            label="Open source"
                             onClick={() => onOpenUrl?.(m.url)}
                           >
-                            Open source
-                          </button>
+                            <ExternalLink
+                              size={14}
+                              strokeWidth={2}
+                              aria-hidden="true"
+                            />
+                          </TrayButton>
                         ) : null}
-                      </div>
+                      </IconTray>
                     </li>
                   ))}
                 </ul>
-              </section>
+              </NudgeFold>
             ) : null}
 
             {semanticCount > 0 ? (
-              <section className="syncle-memory-nudge__section">
-                <h3>Highly related · {semanticCount}</h3>
+              <NudgeFold title={`Highly related · ${semanticCount}`}>
                 <ul>
                   {semantic.slice(0, 5).map((m) => (
                     <li key={m.id}>
-                      <span className="syncle-memory-nudge__kind">
-                        {Math.round((m.score || 0) * 100)}%
-                      </span>
                       <div className="syncle-memory-nudge__related-body">
-                        <span className="syncle-memory-nudge__quote">
+                        <RelatedQuote url={m.sourceUrl} onOpen={onOpenUrl}>
                           {m.quote || m.title || "Related memory"}
-                        </span>
-                        <div className="syncle-memory-nudge__actions">
-                          {m.sourceUrl ? (
-                            <button
-                              type="button"
-                              className="syncle-memory-nudge__link"
-                              onClick={() => onOpenUrl?.(m.sourceUrl)}
-                            >
-                              Open source
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="syncle-memory-nudge__link syncle-memory-nudge__reject"
-                            onClick={() => onRejectSemantic?.(m.id)}
-                          >
-                            Not related
-                          </button>
-                        </div>
+                        </RelatedQuote>
+                        <MatchBar score={m.score} />
+                        <RelatedMeta
+                          createdAt={m.createdAt}
+                          url={m.sourceUrl}
+                        />
                       </div>
+                      <IconTray>
+                        {m.sourceUrl ? (
+                          <TrayButton
+                            label="Open source"
+                            onClick={() => onOpenUrl?.(m.sourceUrl)}
+                          >
+                            <ExternalLink
+                              size={14}
+                              strokeWidth={2}
+                              aria-hidden="true"
+                            />
+                          </TrayButton>
+                        ) : null}
+                        <TrayButton
+                          label="Not related"
+                          onClick={() => onRejectSemantic?.(m.id)}
+                        >
+                          <ThumbsDown
+                            size={14}
+                            strokeWidth={2}
+                            aria-hidden="true"
+                          />
+                        </TrayButton>
+                      </IconTray>
                     </li>
                   ))}
                 </ul>
@@ -252,7 +417,7 @@ export default function MemoryNudge({
                 >
                   Don’t remind on this site today
                 </button>
-              </section>
+              </NudgeFold>
             ) : null}
           </div>
         </div>

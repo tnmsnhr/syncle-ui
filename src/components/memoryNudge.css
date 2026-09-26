@@ -276,7 +276,8 @@
   margin-top: 0;
 }
 
-.syncle-memory-nudge__section h3 {
+.syncle-memory-nudge__section h3,
+.syncle-memory-nudge__fold {
   margin: 0 0 6px;
   font-size: 11px;
   font-weight: 700;
@@ -285,13 +286,37 @@
   color: var(--nudge-muted);
 }
 
-.syncle-memory-nudge__restore {
-  display: inline-flex;
+.syncle-memory-nudge__fold {
+  display: flex;
   align-items: center;
-  margin: 8px 0 4px;
-  padding: 7px 12px;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.syncle-memory-nudge__fold svg {
+  flex-shrink: 0;
+  transition: transform 160ms ease;
+}
+
+.syncle-memory-nudge__fold[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+
+.syncle-memory-nudge__restore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--nudge-accent) 40%, var(--nudge-border));
-  border-radius: 999px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--nudge-accent) 12%, transparent);
   color: var(--nudge-accent);
   font: 600 12px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -321,17 +346,12 @@
 
 .syncle-memory-nudge__section li {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   padding: 8px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--nudge-text) 5%, transparent);
-}
-
-.syncle-memory-nudge__section li.syncle-memory-nudge__exact {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
 }
 
 .syncle-memory-nudge__jump {
@@ -354,18 +374,110 @@
   color: var(--nudge-accent);
 }
 
-.syncle-memory-nudge__delete {
+.syncle-memory-nudge__kind-icon {
+  display: inline-flex;
+  margin-top: 1px;
+  color: var(--nudge-accent);
+}
+
+.syncle-memory-nudge__jump-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.syncle-memory-nudge__when {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--nudge-muted);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.syncle-memory-nudge__when time {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.syncle-memory-nudge__match {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.syncle-memory-nudge__match-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--nudge-text) 10%, transparent);
+  container-type: inline-size;
+}
+
+.syncle-memory-nudge__match-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background-image: linear-gradient(
+    90deg,
+    #e5484d 0%,
+    #f97316 34%,
+    #eab308 67%,
+    #22c55e 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 100cqi 100%;
+}
+
+.syncle-memory-nudge__match-pct {
+  flex-shrink: 0;
+  color: var(--nudge-muted);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.syncle-memory-nudge__tray {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 24px;
+}
+
+.syncle-memory-nudge__tray-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   margin: 0;
-  padding: 4px 2px 4px 8px;
+  padding: 0;
   border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--nudge-muted);
-  font: 600 11px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   cursor: pointer;
 }
 
-.syncle-memory-nudge__delete:hover {
+.syncle-memory-nudge__tray-end {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+}
+
+.syncle-memory-nudge__tray-btn:hover {
+  color: var(--nudge-accent);
+  background: color-mix(in srgb, var(--nudge-text) 6%, transparent);
+}
+
+.syncle-memory-nudge__tray-btn.is-danger:hover {
   color: #e5484d;
+  background: color-mix(in srgb, #e5484d 10%, transparent);
 }
 
 .syncle-memory-nudge__kind {
@@ -384,47 +496,34 @@
   color: var(--nudge-text);
 }
 
+.syncle-memory-nudge__quote-link {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.syncle-memory-nudge__quote-link:hover {
+  color: var(--nudge-accent);
+}
+
 .syncle-memory-nudge__related-body {
   display: grid;
   gap: 4px;
 }
 
-.syncle-memory-nudge__ghost,
-.syncle-memory-nudge__link {
+.syncle-memory-nudge__ghost {
   border: none;
   background: transparent;
-  color: var(--nudge-accent);
+  color: var(--nudge-muted);
   cursor: pointer;
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   padding: 0;
-}
-
-.syncle-memory-nudge__ghost {
-  color: var(--nudge-muted);
-  font-weight: 500;
-}
-
-.syncle-memory-nudge__link {
-  justify-self: start;
-  font-size: 11px;
-}
-
-.syncle-memory-nudge__actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.syncle-memory-nudge__reject {
-  color: var(--nudge-muted);
-  font-weight: 500;
-}
-
-.syncle-memory-nudge__hint {
-  margin: 8px 0 0;
-  color: var(--nudge-muted);
-  font-size: 11px;
 }
 
 @keyframes syncle-nudge-pill-in {

@@ -14,17 +14,19 @@ const SAMPLE_NUDGE = {
   origin: "https://example.com",
   exactCount: 2,
   relatedCount: 1,
-  semanticCount: 1,
+  semanticCount: 2,
   exact: [
     {
       id: "exact-1",
       kind: "comment",
       quote: "Expo linking uses a custom scheme plus universal links.",
+      createdAt: "2026-09-12T10:00:00.000Z",
     },
     {
       id: "exact-2",
       kind: "lasso",
       quote: "The intent filter has to match the path prefix.",
+      createdAt: "2026-09-20T10:00:00.000Z",
     },
   ],
   related: [
@@ -33,6 +35,7 @@ const SAMPLE_NUDGE = {
       kind: "ask",
       quote: "React Navigation linking config",
       url: "https://reactnavigation.org",
+      createdAt: "2026-08-02T10:00:00.000Z",
     },
   ],
   semantic: [
@@ -41,6 +44,14 @@ const SAMPLE_NUDGE = {
       score: 0.84,
       quote: "Handling an incoming URL on a cold start",
       sourceUrl: "https://docs.expo.dev",
+      createdAt: "2026-07-18T10:00:00.000Z",
+    },
+    {
+      id: "semantic-2",
+      score: 0.61,
+      quote: "Path prefixes that fail the intent filter",
+      sourceUrl: "https://docs.expo.dev/linking",
+      createdAt: "2025-11-03T10:00:00.000Z",
     },
   ],
 };

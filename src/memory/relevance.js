@@ -265,6 +265,7 @@ export async function findSemanticHits({
       sourceUrl: raw.url || "",
       origin: raw.origin || "",
       pageKey: raw.pageKey || "",
+      createdAt: raw.createdAt || "",
     });
   }
 
@@ -315,6 +316,7 @@ async function hashFallbackHits({
       sourceUrl: raw.url || "",
       origin: raw.origin || "",
       pageKey: raw.pageKey || "",
+      createdAt: raw.createdAt || "",
     });
   }
   scored.sort((a, b) => b.score - a.score);
