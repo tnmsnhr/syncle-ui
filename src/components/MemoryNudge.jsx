@@ -23,6 +23,8 @@ export default function MemoryNudge({
   onDismiss,
   onOpenUrl,
   onRestoreExact,
+  onFocusExact,
+  onDeleteExact,
   onDismissSemanticSite,
   onRejectSemantic,
   nudgeKey = "",
@@ -138,11 +140,25 @@ export default function MemoryNudge({
                 <h3>On this page · {exactCount}</h3>
                 <ul>
                   {exact.slice(0, 8).map((m) => (
-                    <li key={m.id}>
-                      <span className="syncle-memory-nudge__kind">{m.kind}</span>
-                      <span className="syncle-memory-nudge__quote">
-                        {m.quote || m.note || m.title || "Memory"}
-                      </span>
+                    <li key={m.id} className="syncle-memory-nudge__exact">
+                      <button
+                        type="button"
+                        className="syncle-memory-nudge__jump"
+                        onClick={() => onFocusExact?.(m.id)}
+                      >
+                        <span className="syncle-memory-nudge__kind">{m.kind}</span>
+                        <span className="syncle-memory-nudge__quote">
+                          {m.quote || m.note || m.title || "Memory"}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="syncle-memory-nudge__delete"
+                        aria-label="Delete memory"
+                        onClick={() => onDeleteExact?.(m.id)}
+                      >
+                        Delete
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -154,8 +170,7 @@ export default function MemoryNudge({
                   Show on page
                 </button>
                 <p className="syncle-memory-nudge__hint">
-                  Text marks restore in place. Lassos return as a centroid
-                  marker (area shapes are skipped — they drift).
+                  Tap a memory to jump to it on the page.
                 </p>
               </section>
             ) : null}

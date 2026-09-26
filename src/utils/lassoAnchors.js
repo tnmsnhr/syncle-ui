@@ -172,10 +172,7 @@ export function buildLassoAnchor(pagePts, scrollParents = []) {
   const primary = pickAnchorElement(cx, cy, box);
   if (!primary) return null;
 
-  const relPts = clientPts.map((p) => {
-    const el = pickAnchorElement(p.x, p.y, box) || primary;
-    return pointOnElement(el, p.x, p.y);
-  });
+  const relPts = clientPts.map((p) => pointOnElement(primary, p.x, p.y));
 
   return {
     primaryXPath: getXPath(primary),
@@ -185,45 +182,68 @@ export function buildLassoAnchor(pagePts, scrollParents = []) {
 }
 
 /**
+ * Map a lasso back to client points.
+ * Vertices saved against one element stay in proportion, so resize does not warp the outline.
+ */
+export function resolveLassoClientPoints(anchor) {
+  const relPts = Array.isArray(anchor?.relPts) ? anchor.relPts : [];
+  if (!relPts.length && !anchor?.primaryXPath) return null;
+
+  const primary = resolveXPath(anchor.primaryXPath);
+  const uniform =
+    primary instanceof Element &&
+    relPts.length > 0 &&
+    relPts.every((pt) => !pt?.xpath || pt.xpath === anchor.primaryXPath);
+
+  const samples = relPts.length
+    ? relPts
+    : [{ xpath: anchor.primaryXPath, fx: 0.5, fy: 0.5 }];
+  const clients = [];
+  let scrollParents = [];
+
+  for (const pt of samples) {
+    let el = uniform ? primary : resolveXPath(pt?.xpath);
+    if (!(el instanceof Element) || !el.isConnected) el = primary;
+    if (!(el instanceof Element) || !el.isConnected) continue;
+    if (!uniform && isOversizedElement(el)) {
+      el = primary;
+      if (!(el instanceof Element) || isOversizedElement(el)) continue;
+    }
+    if (el.tagName === "HTML" || el.tagName === "BODY") continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 0.5 && rect.height < 0.5) continue;
+    clients.push({
+      x: rect.left + (Number(pt.fx) || 0) * Math.max(rect.width, 1),
+      y: rect.top + (Number(pt.fy) || 0) * Math.max(rect.height, 1),
+    });
+    if (!scrollParents.length) scrollParents = getScrollParents(el);
+  }
+
+  if (clients.length < 2 && relPts.length >= 2) return null;
+  if (!clients.length) return null;
+  return {
+    clients,
+    scrollParents,
+    element: primary instanceof Element ? primary : null,
+  };
+}
+
+/**
  * Restore page-space polygon from xpath-relative anchors.
  * Returns null if nothing can be resolved (caller may fall back to raw pagePts).
  */
 export function resolveLassoAnchor(anchor) {
-  if (!anchor?.relPts?.length) return null;
+  const live = resolveLassoClientPoints(anchor);
+  if (!live?.clients?.length) return null;
 
-  const pagePts = [];
-  let scrollParents = [];
-  let primaryEl = null;
-
-  for (const pt of anchor.relPts) {
-    let el = resolveXPath(pt.xpath);
-    if (el && isOversizedElement(el)) el = null;
-    if (!el || !el.isConnected) {
-      el = resolveXPath(anchor.primaryXPath);
-      if (el && isOversizedElement(el)) el = null;
-    }
-    if (!el || !el.isConnected) continue;
-
-    const rect = el.getBoundingClientRect();
-    if (rect.width < 0.5 && rect.height < 0.5) continue;
-
-    const parents = getScrollParents(el);
-    if (!scrollParents.length) scrollParents = parents;
-    if (!primaryEl) primaryEl = el;
-
-    const client = {
-      x: rect.left + (Number(pt.fx) || 0) * Math.max(rect.width, 1),
-      y: rect.top + (Number(pt.fy) || 0) * Math.max(rect.height, 1),
-    };
-    pagePts.push(clientToPage(client.x, client.y, parents));
-  }
-
+  const parents = live.scrollParents || [];
+  const pagePts = live.clients.map((pt) => clientToPage(pt.x, pt.y, parents));
   if (pagePts.length < 2) return null;
 
   return {
     pagePts,
-    scrollParents,
-    element: primaryEl,
+    scrollParents: parents,
+    element: live.element,
     targets: [],
   };
 }

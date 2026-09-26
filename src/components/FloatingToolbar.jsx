@@ -219,6 +219,8 @@ export default function FloatingToolbar({
   onMemoryDismiss,
   onMemoryOpenUrl,
   onMemoryRestoreExact,
+  onMemoryFocusExact,
+  onMemoryDeleteExact,
   onMemoryDismissSemanticSite,
   onMemoryRejectSemantic,
 }) {
@@ -493,6 +495,8 @@ export default function FloatingToolbar({
           onDismiss={onMemoryDismiss}
           onOpenUrl={onMemoryOpenUrl}
           onRestoreExact={onMemoryRestoreExact}
+          onFocusExact={onMemoryFocusExact}
+          onDeleteExact={onMemoryDeleteExact}
           onDismissSemanticSite={onMemoryDismissSemanticSite}
           onRejectSemantic={onMemoryRejectSemantic}
         />

@@ -329,6 +329,45 @@
   background: color-mix(in srgb, var(--nudge-text) 5%, transparent);
 }
 
+.syncle-memory-nudge__section li.syncle-memory-nudge__exact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.syncle-memory-nudge__jump {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.syncle-memory-nudge__jump:hover .syncle-memory-nudge__quote {
+  color: var(--nudge-accent);
+}
+
+.syncle-memory-nudge__delete {
+  margin: 0;
+  padding: 4px 2px 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--nudge-muted);
+  font: 600 11px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  cursor: pointer;
+}
+
+.syncle-memory-nudge__delete:hover {
+  color: #e5484d;
+}
+
 .syncle-memory-nudge__kind {
   font-size: 10px;
   font-weight: 700;

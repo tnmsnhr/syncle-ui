@@ -12,6 +12,14 @@ import { placePopupPosition } from "../utils/placePopupPosition.js";
 import { getViewportSize } from "../utils/viewport.js";
 import "./popupBubble.css";
 
+function hostOrigin(el) {
+  const root = el?.getRootNode?.();
+  const host = root instanceof ShadowRoot ? root.host : null;
+  if (!(host instanceof Element)) return { x: 0, y: 0 };
+  const rect = host.getBoundingClientRect();
+  return { x: rect.left, y: rect.top };
+}
+
 function scrollDelta(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
@@ -40,6 +48,8 @@ const PopupBubble = ({
   scrollParents = [],
   /** Live DOM Range — text marks reflow with this on resize/scroll. */
   anchorRange = null,
+  /** Returns a fresh client point for restored lassos. */
+  liveCentroid = null,
   dotColor = "#22c55e",
   zIndex = 2147483647,
   colorScheme = "light",
@@ -57,6 +67,8 @@ const PopupBubble = ({
   scrollParentsRef.current = scrollParents;
   const anchorRangeRef = useRef(anchorRange);
   anchorRangeRef.current = anchorRange;
+  const liveCentroidRef = useRef(liveCentroid);
+  liveCentroidRef.current = liveCentroid;
   const originRef = useRef(getScrollOffset(scrollParents));
   const collapsedRef = useRef(Boolean(startCollapsed));
   const pinnedRef = useRef(false);
@@ -88,6 +100,20 @@ const PopupBubble = ({
   }, [collapsed]);
 
   const resolveClientAnchor = () => {
+    const live = liveCentroidRef.current?.();
+    if (live && Number.isFinite(live.x) && Number.isFinite(live.y)) {
+      return {
+        box: {
+          minX: live.x - 8,
+          minY: live.y - 8,
+          maxX: live.x + 8,
+          maxY: live.y + 8,
+          w: 16,
+          h: 16,
+        },
+        centroid: { x: live.x, y: live.y },
+      };
+    }
     const box = liveRangeBox(anchorRangeRef.current);
     if (box) {
       return {
@@ -108,8 +134,9 @@ const PopupBubble = ({
 
   const positionDot = (el) => {
     const { centroid } = resolveClientAnchor();
-    el.style.left = `${centroid.x}px`;
-    el.style.top = `${centroid.y}px`;
+    const origin = hostOrigin(el);
+    el.style.left = `${centroid.x - origin.x}px`;
+    el.style.top = `${centroid.y - origin.y}px`;
     el.style.transform = "translate(-50%, -50%)";
   };
 
@@ -157,8 +184,9 @@ const PopupBubble = ({
     } else {
       panelOrigin = anchor.panel;
     }
-    el.style.left = `${panelOrigin.x}px`;
-    el.style.top = `${panelOrigin.y}px`;
+    const origin = hostOrigin(el);
+    el.style.left = `${panelOrigin.x - origin.x}px`;
+    el.style.top = `${panelOrigin.y - origin.y}px`;
     el.style.transform = "translate(0, 0)";
     placePointer(el, panelOrigin, anchor.centroid);
   };

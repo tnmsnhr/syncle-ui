@@ -50,9 +50,9 @@ import {
   dismissSemanticForOriginToday,
   rejectSemanticMemory,
 } from "./memory/index.js";
-import { loadExactRestores } from "./memory/restoreExact.js";
+import { loadExactRestores, scrollRestoreTarget, lassoClientCentroid } from "./memory/restoreExact.js";
 import { PAGE_CONTEXT_IDLE_MS } from "./memory/embedConfig.js";
-import { clearAllLassoTargetMarks, clearLassoTargetMarks } from "./utils/lassoAnchors.js";
+import { clearAllLassoTargetMarks, clearLassoTargetMarks, resolveLassoAnchor } from "./utils/lassoAnchors.js";
 import { memoryMessage } from "./utils/normalizeMemory.js";
 import pointerUrl from "./assets/svg/pointer.svg";
 
@@ -221,6 +221,44 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
     }
 
     liveCtx()?.clearRect(0, 0, width, height);
+    const moved = [];
+    for (const poly of polysRef.current) {
+      if (!poly.lassoAnchor) continue;
+      const resolved = resolveLassoAnchor(poly.lassoAnchor);
+      if (!resolved?.pagePts?.length) continue;
+      poly.pagePts = resolved.pagePts;
+      poly.scrollParents = resolved.scrollParents || [];
+      moved.push({
+        id: poly.id,
+        centroid: centroidOf(resolved.pagePts),
+        parents: poly.scrollParents,
+      });
+    }
+    if (moved.length) {
+      setPopups((prev) => {
+        let changed = false;
+        const next = prev.map((popup) => {
+          const hit = moved.find((item) => item.id === popup.id);
+          if (!hit) return popup;
+          const dx = (popup.pageX ?? hit.centroid.x) - (popup.centroidPageX ?? hit.centroid.x);
+          const dy = (popup.pageY ?? hit.centroid.y) - (popup.centroidPageY ?? hit.centroid.y);
+          const same =
+            Math.abs((popup.centroidPageX ?? 0) - hit.centroid.x) < 0.5 &&
+            Math.abs((popup.centroidPageY ?? 0) - hit.centroid.y) < 0.5;
+          if (same) return popup;
+          changed = true;
+          return {
+            ...popup,
+            centroidPageX: hit.centroid.x,
+            centroidPageY: hit.centroid.y,
+            pageX: hit.centroid.x + dx,
+            pageY: hit.centroid.y + dy,
+            scrollParents: hit.parents,
+          };
+        });
+        return changed ? next : prev;
+      });
+    }
     redrawInk();
   };
 
@@ -480,9 +518,15 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
   };
   persistCaptureRef.current = persistCapture;
 
-  const restoreExactOnPage = async () => {
+  const restoreExactOnPage = async (onlyId) => {
     try {
       const { textRestores, lassoRestores } = await loadExactRestores();
+      const texts = onlyId
+        ? textRestores.filter((item) => item.id === onlyId)
+        : textRestores;
+      const lassos = onlyId
+        ? lassoRestores.filter((item) => item.id === onlyId)
+        : lassoRestores;
       const existing = new Set([
         ...popups.map((p) => p.id),
         ...polysRef.current.map((p) => p.id),
@@ -491,7 +535,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
 
       const nextPopups = [];
 
-      for (const item of textRestores) {
+      for (const item of texts) {
         if (existing.has(item.id)) continue;
         const fill = highlightFill(item.theme);
         applyTextHighlight(item.id, item.range, fill);
@@ -515,7 +559,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         });
       }
 
-      for (const item of lassoRestores) {
+      for (const item of lassos) {
         if (existing.has(item.id)) continue;
         nextPopups.push({
           id: item.id,
@@ -527,6 +571,7 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
           centroidPageX: item.centroidPage.x,
           centroidPageY: item.centroidPage.y,
           scrollParents: item.scrollParents,
+          lassoAnchor: item.lassoAnchor || null,
           messages: item.messages,
           startCollapsed: true,
           centroidOnly: true,
@@ -543,9 +588,46 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       }
       redrawInkRef.current();
       setNudgeOpen(false);
+      return {
+        text: texts[0] || null,
+        lasso: lassos[0] || null,
+      };
     } catch (err) {
       console.warn("[syncle] restoreExact failed", err);
+      return { text: null, lasso: null };
     }
+  };
+
+  const focusExactMemory = async (id) => {
+    const placed = await restoreExactOnPage(id);
+    scrollRestoreTarget(placed?.text || placed?.lasso);
+  };
+
+  const deleteExactMemory = (id) => {
+    setNudge((prev) => {
+      if (!prev) return prev;
+      const exact = (prev.exact || []).filter((m) => m.id !== id);
+      const next = { ...prev, exact, exactCount: exact.length };
+      if (next.exactCount + next.relatedCount + (next.semanticCount || 0) < 1) {
+        nudgeActiveRef.current = false;
+        setNudgeOpen(false);
+        return null;
+      }
+      return next;
+    });
+    const onPage =
+      popups.some((p) => p.id === id) ||
+      textHighlightsRef.current.has(id) ||
+      polysRef.current.some((p) => p.id === id);
+    if (onPage) {
+      removeSelection(id);
+      return;
+    }
+    void deleteCapture(id)
+      .then(() => refreshNudgeRef.current())
+      .catch((err) => {
+        console.warn("[syncle] deleteCapture failed", err);
+      });
   };
 
   const clearVisualCaptures = () => {
@@ -885,6 +967,11 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
         centroidPageY={p.centroidPageY}
         scrollParents={p.scrollParents}
         anchorRange={p.kind === "text" ? hl?.range || null : null}
+        liveCentroid={
+          p.centroidOnly && p.lassoAnchor
+            ? () => lassoClientCentroid(p.lassoAnchor)
+            : null
+        }
         dotColor={lassoTheme.border}
         colorScheme={panelTheme}
         zIndex={POPUP_Z_BASE + stackIndex}
@@ -931,6 +1018,12 @@ export default function OverlayApp({ toolbarMount, toolbarControlsMount }) {
       }}
       onMemoryRestoreExact={() => {
         void restoreExactOnPage();
+      }}
+      onMemoryFocusExact={(id) => {
+        void focusExactMemory(id);
+      }}
+      onMemoryDeleteExact={(id) => {
+        deleteExactMemory(id);
       }}
       onMemoryDismissSemanticSite={() => {
         const origin = nudge?.origin || (() => {
