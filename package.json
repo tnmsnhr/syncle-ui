@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:ui": "vite --open /workbench.html",
     "dev:ext": "node scripts/dev-extension.mjs",
     "build": "vite build && vite build --config vite.content.config.js && vite build --config vite.offscreen.config.js && npm run copy:ext",
     "copy:ext": "node scripts/copy-manifest.mjs && cp public/background.js dist/ && cp public/spa-hook.js dist/ && cp public/offscreen.html dist/ && cp node_modules/onnxruntime-web/dist/ort-wasm*.wasm dist/ && (test -f public/icon.png && cp public/icon.png dist/ || true) && (test -d public/icons && mkdir -p dist/icons && cp -R public/icons/. dist/icons/ || true)",

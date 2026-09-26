@@ -38,7 +38,10 @@ export default function MemoryNudge({
     if (total < 1) return undefined;
     setPhase("pill");
     const toDot = window.setTimeout(() => setPhase("dot"), PILL_MS);
-    const toDock = window.setTimeout(() => setPhase("docked"), PILL_MS + DOT_MS);
+    const toDock = window.setTimeout(
+      () => setPhase("docked"),
+      PILL_MS + DOT_MS,
+    );
     return () => {
       window.clearTimeout(toDot);
       window.clearTimeout(toDock);
@@ -93,7 +96,10 @@ export default function MemoryNudge({
           onClick={onToggle}
           aria-expanded={open}
         >
-          <span className="syncle-memory-nudge__mark is-live" aria-hidden="true" />
+          <span
+            className="syncle-memory-nudge__mark is-live"
+            aria-hidden="true"
+          />
           <span className="syncle-memory-nudge__label">{label}</span>
         </button>
       ) : (
@@ -116,9 +122,7 @@ export default function MemoryNudge({
 
       {sheetMounted ? (
         <div
-          className={`syncle-memory-nudge__sheet${
-            sheetOpen ? " is-open" : ""
-          }`}
+          className={`syncle-memory-nudge__sheet${sheetOpen ? " is-open" : ""}`}
           role="dialog"
           aria-label="What you were reading"
           aria-hidden={!sheetOpen}
@@ -146,7 +150,9 @@ export default function MemoryNudge({
                         className="syncle-memory-nudge__jump"
                         onClick={() => onFocusExact?.(m.id)}
                       >
-                        <span className="syncle-memory-nudge__kind">{m.kind}</span>
+                        <span className="syncle-memory-nudge__kind">
+                          {m.kind}
+                        </span>
                         <span className="syncle-memory-nudge__quote">
                           {m.quote || m.note || m.title || "Memory"}
                         </span>
@@ -181,7 +187,9 @@ export default function MemoryNudge({
                 <ul>
                   {related.slice(0, 5).map((m) => (
                     <li key={m.id}>
-                      <span className="syncle-memory-nudge__kind">{m.kind}</span>
+                      <span className="syncle-memory-nudge__kind">
+                        {m.kind}
+                      </span>
                       <div className="syncle-memory-nudge__related-body">
                         <span className="syncle-memory-nudge__quote">
                           {m.quote || m.note || m.title || "Memory"}

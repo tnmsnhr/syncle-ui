@@ -1,0 +1,84 @@
+body {
+  margin: 0;
+}
+
+.syncle-workbench {
+  min-height: 100vh;
+  margin: 0;
+  background: #f6f4ef;
+  color: #1c1c1e;
+  font: 16px/1.5 Georgia, "Iowan Old Style", serif;
+}
+
+.syncle-workbench__article {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 72px 24px 160px;
+}
+
+.syncle-workbench__article h1 {
+  font-size: 40px;
+  line-height: 1.15;
+  margin: 0 0 12px;
+}
+
+.syncle-workbench__article p {
+  margin: 0 0 16px;
+}
+
+.syncle-workbench__dock {
+  position: fixed;
+  z-index: 40;
+  top: 16px;
+  left: 16px;
+  width: 220px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(60, 60, 67, 0.16);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  font: 12px/1.35 system-ui, sans-serif;
+  color: #1c1c1e;
+}
+
+.syncle-workbench__dock h2 {
+  margin: 0 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(28, 28, 30, 0.55);
+}
+
+.syncle-workbench__dock label {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.syncle-workbench__dock select,
+.syncle-workbench__dock button {
+  font: inherit;
+}
+
+.syncle-workbench__dock select {
+  width: 100%;
+}
+
+.syncle-workbench__stage {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.syncle-workbench__stage > * {
+  pointer-events: auto;
+}
+
+/* Same 50px hub the floating toolbar uses, so the sheet stays inset. */
+.syncle-workbench__nudge-anchor {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 50px;
+  height: 50px;
+}

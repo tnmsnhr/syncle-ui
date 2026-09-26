@@ -63,8 +63,11 @@ npm install
 # Production build (load dist/ in Chrome once per release)
 npm run build
 
-# Development: auto-rebuild on save (recommended)
+# Development: auto-rebuild the unpacked extension
 npm run dev:ext
+
+# Component workbench: hot reload for bubbles, nudge, and toolbars
+npm run dev:ui
 ```
 
 ### Faster development (watch mode)
